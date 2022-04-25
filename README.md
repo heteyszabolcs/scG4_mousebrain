@@ -10,11 +10,16 @@ Potential hypothesis/model: KLF4 is recruited. Then, BRG1 remodelling protein go
 
 # Data
 All medium sized files needed for the R files are available at Uppmax: 
+  
   @ Uppmax:
+    
     external bigwigs: _/proj/snic2020-6-3/GEOPIPE/OUTPUT/bw_
-  our working directory: _/proj/snic2020-6-3/SZABOLCS/LTRIS2_BRG1_H33_and_G4s/_
+    
+    our working directory: _/proj/snic2020-6-3/SZABOLCS/LTRIS2_BRG1_H33_and_G4s/_
 
 # Task and discussion
+   
    @ Trello: 
+    
     Marek's analysis: https://trello.com/c/c2a0wan6/12-mareks-analysis
 
