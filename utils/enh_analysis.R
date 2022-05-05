@@ -8,6 +8,7 @@ suppressPackageStartupMessages({
   library("GenomicRanges")
   library("wigglescout")
   library("plyranges")
+  library("ArchR")
 })
 
 result_folder = "../results/GenomicRanges/"
@@ -16,6 +17,7 @@ result_folder = "../results/GenomicRanges/"
 g4_peaks = "../results/Seurat/callpeaks_GFPsorted/peaks_per_clusters.bed"
 cm_enh = "../data/bed/ESC_Enhancer_CruzMolina.active_mm10.bed"
 gl_enh = "../data/bed/GSE171771_FAIRE_STARR_enh_mESC.bed"
+ltrs = "../data/bed/RepMasker_lt200bp.LTRIS2.bed"
 
 ## data exploration on G4 peak set
 # G4 peak set
@@ -282,11 +284,42 @@ enh_anals = list.files(glue("{result_folder}"), pattern = "*enh_anal.tsv")
 collect = lapply(enh_anals, function(x)
   fread(glue("{result_folder}{x}")))
 collect = bind_rows(collect)
+
+## find G4 peaks near to LTR sequences
+ltrs = fread(ltrs)
+ltrs = GRanges(
+  seqnames = ltrs$V1,
+  ranges = IRanges(
+    start = ltrs$V2,
+    end = ltrs$V3,
+    names = rep("ltrs", nrow(ltrs))
+  )
+)
+
+sign_g4s = collect %>% dplyr::select(seqnames, start, end)
+sign_g4s = GRanges(
+  seqnames = sign_g4s$seqnames,
+  ranges = IRanges(
+    start = sign_g4s$start,
+    end = sign_g4s$end,
+    names = rep("G4", nrow(sign_g4s))
+  )
+)
+# expand G4 peaks by 1-1 kbp
+sign_g4s = extendGR(sign_g4s, upstream = 500, downstream = 500)
+
+# overlap with LTRs
+ltr_ol = suppressWarnings(findOverlaps(sign_g4s, ltrs, type = "any", minoverlap = 1))
+
+collect = collect %>% mutate(LTR_vicinity = "0")
+for (hit in ltr_ol@from) {
+  collect[hit, which(colnames(collect) == "LTR_vicinity")] = "1"
+}
+
 write_tsv(collect,
           glue("{result_folder}enhancer_analysis_output.tsv"))
 
 
-annot_peaks
 
 
 

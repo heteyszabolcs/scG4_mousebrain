@@ -10,7 +10,6 @@ suppressPackageStartupMessages({
 })
 
 enhancer_anal = "../results/GenomicRanges/"
-
 collect = fread(glue("{enhancer_anal}enhancer_analysis_output.tsv"))
 
 cm_bar = collect %>%
@@ -524,4 +523,151 @@ ggsave(
   dpi = 300,
 )
 
+scatter_astro = collect %>% mutate(LTR_vicinity = as.character(LTR_vicinity)) %>%
+  ggplot(.,
+         aes(x = H3K27ac_Astrocytes.bw, y = signalValue)) +
+  geom_point(aes(fill = LTR_vicinity, size = LTR_vicinity), 
+             colour = "black", pch = 21, size = 5, alpha = 1) +
+  scale_fill_manual(values = c('#f0f0f0','#de2d26')) +
+  scale_size_manual(values = c(3, 8)) +
+  geom_label_repel(
+    aes(label = ifelse(
+      LTR_vicinity == 1,
+      as.character(Gene_name),
+      ''
+    )),
+    box.padding   = 0.9,
+    max.overlaps = Inf,
+    point.padding = 0.5,
+    size = 4,
+    segment.color = 'black'
+  ) +
+  labs(
+    title = "",
+    x = "H3K27ac - Astrocytes",
+    y = "MACS2 signalValue",
+    fill = "LTR vicinity"
+  ) +
+  theme_classic() +
+  theme(
+    axis.text.x = element_blank(),
+    axis.ticks.x = element_blank(),
+    text = element_text(size = 8),
+    plot.title = element_text(size = 8)
+  )
+scatter_astro
 
+scatter_mol = collect %>% mutate(LTR_vicinity = as.character(LTR_vicinity)) %>%
+  ggplot(.,
+         aes(x = H3K27ac_mOL.bw, y = signalValue)) +
+  geom_point(aes(fill = LTR_vicinity), 
+             colour = "black", pch = 21, size = 5, alpha = 1) +
+  scale_fill_manual(values = c('#f0f0f0','#de2d26')) +
+  geom_label_repel(
+    aes(label = ifelse(
+      LTR_vicinity == 1,
+      as.character(Gene_name),
+      ''
+    )),
+    box.padding   = 0.9,
+    max.overlaps = Inf,
+    point.padding = 0.5,
+    size = 4,
+    segment.color = 'black'
+  ) +
+  labs(
+    title = "",
+    x = "H3K27ac - mOL",
+    y = "MACS2 signalValue",
+    fill = "LTR vicinity"
+  ) +
+  theme_classic() +
+  theme(
+    axis.text.x = element_blank(),
+    axis.ticks.x = element_blank(),
+    text = element_text(size = 8),
+    plot.title = element_text(size = 8)
+  )
+scatter_mol
+
+scatter_oec = collect %>% mutate(LTR_vicinity = as.character(LTR_vicinity)) %>%
+  ggplot(.,
+         aes(x = H3K27ac_OEC.bw, y = signalValue)) +
+  geom_point(aes(fill = LTR_vicinity), 
+             colour = "black", pch = 21, size = 5, alpha = 1) +
+  scale_fill_manual(values = c('#f0f0f0','#de2d26')) +
+  geom_label_repel(
+    aes(label = ifelse(
+      LTR_vicinity == 1,
+      as.character(Gene_name),
+      ''
+    )),
+    box.padding   = 0.9,
+    max.overlaps = Inf,
+    point.padding = 0.5,
+    size = 4,
+    segment.color = 'black'
+  ) +
+  labs(
+    title = "",
+    x = "H3K27ac - OEC",
+    y = "MACS2 signalValue",
+    fill = "LTR vicinity"
+  ) +
+  theme_classic() +
+  theme(
+    axis.text.x = element_blank(),
+    axis.ticks.x = element_blank(),
+    text = element_text(size = 8),
+    plot.title = element_text(size = 8)
+  )
+scatter_oec
+
+scatter_opc = collect %>% mutate(LTR_vicinity = as.character(LTR_vicinity)) %>%
+  ggplot(.,
+         aes(x = H3K27ac_OPC.bw, y = signalValue)) +
+  geom_point(aes(fill = LTR_vicinity), 
+             colour = "black", pch = 21, size = 5, alpha = 1) +
+  scale_fill_manual(values = c('#f0f0f0','#de2d26')) +
+  geom_label_repel(
+    aes(label = ifelse(
+      LTR_vicinity == 1,
+      as.character(Gene_name),
+      ''
+    )),
+    box.padding   = 0.9,
+    max.overlaps = Inf,
+    point.padding = 0.5,
+    size = 4,
+    segment.color = 'black'
+  ) +
+  labs(
+    title = "",
+    x = "H3K27ac - OPC",
+    y = "MACS2 signalValue",
+    fill = "LTR vicinity"
+  ) +
+  theme_classic() +
+  theme(
+    axis.text.x = element_blank(),
+    axis.ticks.x = element_blank(),
+    text = element_text(size = 8),
+    plot.title = element_text(size = 8)
+  )
+scatter_opc
+
+scatter_grid = plot_grid(
+  scatter_astro,
+  scatter_mol,
+  scatter_oec,
+  scatter_opc
+)
+scatter_grid
+
+ggsave(
+  glue("{enhancer_anal}G4_H3K27ac_scatter_grid.png"),
+  plot = scatter_grid,
+  width = 10,
+  height = 10,
+  dpi = 300,
+)
