@@ -1,5 +1,10 @@
 #!/bin/bash -l
+#SBATCH -A snic2020-15-9
+#SBATCH -p core
+#SBATCH -n 4
+#SBATCH -t 12:00:00
 #SBATCH -M snowy
+#SBATCH -J deeptools
 
 module load bioinfo-tools
 module load deepTools
@@ -150,8 +155,55 @@ cd /proj/snic2020-6-3/SZABOLCS/LTRIS2_BRG1_H33_and_G4s/utils
 # -ymax 70 -yzmax 70
 
 # H3.3K27Ac ChIP-Seq - unique_G4_NPC.bed
-Rscript bw_heatmap_NPC_G4s.R -bw "../data/bw/ESC_H33WT_H3K27ac.bw" -b "../data/bed/unique_G4_NPC.bed" -l "H3K27ac-H3.3WT" -o "../results/deeptools/H3.3WT_NPC_G4s.png" \
- -ymax 70 -yzmax 70
-Rscript bw_heatmap_NPC_G4s.R -bw "../data/bw/ESC_H33KO_H3K27ac.bw" -b "../data/bed/unique_G4_NPC.bed" -l "H3K27ac-H3.3KO" -o "../results/deeptools/H3.3KO_NPC_G4s.png" \
- -ymax 70 -yzmax 70
+# Rscript bw_heatmap_NPC_G4s.R -bw "../data/bw/ESC_H33WT_H3K27ac.bw" -b "../data/bed/unique_G4_NPC.bed" -l "H3K27ac-H3.3WT" -o "../results/deeptools/H3.3WT_NPC_G4s.png" \
+ # -ymax 70 -yzmax 70
+# Rscript bw_heatmap_NPC_G4s.R -bw "../data/bw/ESC_H33KO_H3K27ac.bw" -b "../data/bed/unique_G4_NPC.bed" -l "H3K27ac-H3.3KO" -o "../results/deeptools/H3.3KO_NPC_G4s.png" \
+ # -ymax 70 -yzmax 70
 
+# Consensus G4 heatmaps
+# Rscript bw_heatmap_consG4.R -bw "../data/bw/King2017_BRG1fl_BRG1_1.bs5.bw" -b "../data/bed/consensus_G4s.bed" -l "BRG1" -o "../results/deeptools/King_et_al_BRG1_G4s.png" \
+  # -ymax 10 -yzmax 10
+# Rscript bw_heatmap_consG4.R -bw "../data/bw/Chronis2017_Klf4.bs5.bw" -b "../data/bed/consensus_G4s.bed" -l "KLF4" -o "../results/deeptools/Chronis_et_al_KLF4_G4s.png" \
+  # -ymax 10 -yzmax 10
+# Rscript bw_heatmap_consG4.R -bw "../data/bw/Chronis2017_Oct4.bs5.bw" -b "../data/bed/consensus_G4s.bed" -l "OCT4" -o "../results/deeptools/Chronis_et_al_OCT4_G4s.png" \
+  # -ymax 10 -yzmax 10
+# Rscript bw_heatmap_consG4.R -bw "../data/bw/Chronis2017_Sox2.bs5.bw" -b "../data/bed/consensus_G4s.bed" -l "SOX2" -o "../results/deeptools/Chronis_et_al_SOX2_G4s.png" \
+  # -ymax 10 -yzmax 10
+# Rscript bw_heatmap_consG4.R -bw "../data/GSE157637/H3K27ac_Astrocytes.bw" -b "../data/bed/consensus_G4s.bed" -l "H3K27ac_Astrocytes" -o "../results/deeptools/Bartosovic_H3K27ac-Astrocytes_G4s.png" \
+  # -ymax 25 -yzmax 25
+# Rscript bw_heatmap_consG4.R -bw "../data/GSE157637/H3K27ac_mOL.bw" -b "../data/bed/consensus_G4s.bed" -l "H3K27ac_mOL" -o "../results/deeptools/Bartosovic_H3K27ac-mOL_G4s.png" \
+  # -ymax 25 -yzmax 25
+# Rscript bw_heatmap_consG4.R -bw "../data/GSE157637/H3K27ac_OEC.bw" -b "../data/bed/consensus_G4s.bed" -l "H3K27ac_OEC" -o "../results/deeptools/Bartosovic_H3K27ac-OEC_G4s.png" \
+  # -ymax 25 -yzmax 25
+# Rscript bw_heatmap_consG4.R -bw "../data/GSE157637/H3K27ac_OPC.bw" -b "../data/bed/consensus_G4s.bed" -l "H3K27ac_OPC" -o "../results/deeptools/Bartosovic_H3K27ac-OPC_G4s.png" \
+  # -ymax 25 -yzmax 25
+# Rscript bw_heatmap_consG4.R -bw "../data/bw/Creyghton_et_al_mESC_H3K27ac.bw" -b "../data/bed/consensus_G4s.bed" -l "H3K27ac_mESC" -o "../results/deeptools/Creyghton_et_al_mESC_H3K27ac_G4s.png" \
+  # -ymax 25 -yzmax 25
+# Rscript bw_heatmap_consG4.R -bw "../data/bw/ESC_H33WT_H3K27ac.bw" -b "../data/bed/consensus_G4s.bed" -l "H3K27ac_mESC" -o "../results/deeptools/H33WT_mESC_H3K27ac_G4s.png" \
+  # -ymax 25 -yzmax 25
+# Rscript bw_heatmap_consG4.R -bw "../data/GSE157637/H3K4me3_Microglia.bw" -b "../data/bed/consensus_G4s.bed" -l "H3K4me3_Microglia" -o "../results/deeptools/Bartosovic_H3K4me3-Microg_G4s.png" \
+  # -ymax 50 -yzmax 50
+# Rscript bw_heatmap_consG4.R -bw "../data/GSE157637/H3K4me3_Neurons_1.bw" -b "../data/bed/consensus_G4s.bed" -l "H3K4me3_Neurons" -o "../results/deeptools/Bartosovic_H3K4me3-Neurons_G4s.png" \
+  # -ymax 50 -yzmax 50
+# Rscript bw_heatmap_consG4.R -bw "../data/GSE157637/H3K4me3_OEC.bw" -b "../data/bed/consensus_G4s.bed" -l "H3K4me3_OEC" -o "../results/deeptools/Bartosovic_H3K4me3-OEC_G4s.png" \
+  # -ymax 50 -yzmax 50
+  
+# G4 peaks in MEF, mESC, postnatal neural cells
+Rscript bw_heatmap_consG4.R -bw "../results/Seurat/callpeaks_GFPsorted/cluster_bigwigs/cluster_0.bw" -b "../data/bed/consensus_G4s.bed" -l "Seurat_cl_0" -o "../results/deeptools/cluster0_G4s.png" \
+  -ymax 120 -yzmax 120
+Rscript bw_heatmap_consG4.R -bw "../results/Seurat/callpeaks_GFPsorted/cluster_bigwigs/cluster_1.bw" -b "../data/bed/consensus_G4s.bed" -l "Seurat_cl_1" -o "../results/deeptools/cluster1_G4s.png" \
+  -ymax 120 -yzmax 120
+Rscript bw_heatmap_consG4.R -bw "../results/Seurat/callpeaks_GFPsorted/cluster_bigwigs/cluster_2.bw" -b "../data/bed/consensus_G4s.bed" -l "Seurat_cl_2" -o "../results/deeptools/cluster2_G4s.png" \
+  -ymax 120 -yzmax 120
+Rscript bw_heatmap_consG4.R -bw "../results/Seurat/callpeaks_GFPsorted/cluster_bigwigs/cluster_3.bw" -b "../data/bed/consensus_G4s.bed" -l "Seurat_cl_3" -o "../results/deeptools/cluster3_G4s.png" \
+  -ymax 120 -yzmax 120
+Rscript bw_heatmap_consG4.R -bw "../results/Seurat/callpeaks_GFPsorted/cluster_bigwigs/cluster_4.bw" -b "../data/bed/consensus_G4s.bed" -l "Seurat_cl_4" -o "../results/deeptools/cluster4_G4s.png" \
+  -ymax 120 -yzmax 120
+Rscript bw_heatmap_consG4.R -bw "../data/bw/G4_MEF_CnT_R2_S2_L001.mm10.bw" -b "../data/bed/consensus_G4s.bed" -l "G4_MEF" -o "../results/deeptools/MEF_CnT_G4s_1.png" \
+  -ymax 100 -yzmax 100
+Rscript bw_heatmap_consG4.R -bw "../data/bw/G4_MEF_CnT_R1_S1_L001.mm10.bw" -b "../data/bed/consensus_G4s.bed" -l "G4_MEF" -o "../results/deeptools/MEF_CnT_G4s_2.png" \
+  -ymax 100 -yzmax 100
+Rscript bw_heatmap_consG4.R -bw "../data/bw/G4_H33WT_SL_CnT_R2_S4_L001.mm10.bw" -b "../data/bed/consensus_G4s.bed" -l "G4_mESC" -o "../results/deeptools/mESC_CnT_G4s_1.png" \
+  -ymax 100 -yzmax 100
+Rscript bw_heatmap_consG4.R -bw "../data/bw/G4_H33WT_SL_CnT_R1_S3_L001.mm10.bw" -b "../data/bed/consensus_G4s.bed" -l "G4_mESC" -o "../results/deeptools/mESC_CnT_G4s_2.png" \
+  -ymax 100 -yzmax 100
