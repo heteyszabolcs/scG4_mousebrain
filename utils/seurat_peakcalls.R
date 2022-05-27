@@ -80,6 +80,17 @@ g4 = NormalizeData(
   scale.factor = median(g4$nCount_peaks)
 )
 
+# extract cell barcodes per cluster
+barcodes = g4@meta.data %>% 
+  rownames_to_column("barcodes") %>%
+  dplyr::select(barcodes, seurat_clusters)
+write_tsv(barcodes, glue("{result_folder}barcodes_per_cluster.tsv"))
+
+for(cluster in unique(barcodes$seurat_clusters)) {
+  subset = barcodes %>% dplyr::filter(seurat_clusters == cluster)
+  write_tsv(subset, glue("{result_folder}barcodes_cluster_{as.character(cluster)}.tsv"), col_names = FALSE)
+}
+
 # export Rds
 saveRDS(g4, glue("{result_folder}GFP_sorted.Rds"))
 

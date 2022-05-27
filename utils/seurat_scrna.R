@@ -14,6 +14,7 @@ suppressPackageStartupMessages({
 cellranger_folder = "../data/GSE163484/"
 # path to result folder
 result_folder = "../results/Seurat/"
+ptm_objects = "../data/GSE157637/"
 
 ### replication 1 - GSM4979874 ### 
 # read and process data
@@ -81,6 +82,8 @@ ggsave(
   height = 10,
   dpi = 300,
 )
+
+saveRDS(rna1, glue("{result_folder}scRNASeq_GSM4979874_rep1.rds"))
 
 ### replication 2 - GSM4979875 ###
 # read and process data
@@ -221,5 +224,123 @@ saveRDS(integrate, glue("{result_folder}integration/mneural_scRNA-Seq_Marek.Rds"
 # example:
 # gene = FetchData(integrate, vars = "Plp1")
 
+## integrate the replicate1 with H3K4me3 scC&T data by CCA-based Seurat integration protocol
+# load Bartosovic H3K4me3 scC&T data and process it:
+k4me3 = readRDS(glue("{ptm_objects}H3K4me3_seurat_object.Rds"))
+k4me3 = AddMetaData(object = k4me3,
+                      metadata = "scCut&Tag H3K4me3",
+                      col.name = "group")
+DefaultAssay(k4me3) = "GA"
+k4me3[["bins_5000"]] = NULL
+k4me3[["peaks"]] = NULL
+k4me3[["PA"]] = NULL
+
+
+k4me3 = FindVariableFeatures(k4me3, selection.method = "vst", nfeatures = 2000)
+all.genes = rownames(k4me3)
+k4me3 = ScaleData(k4me3, features = all.genes)
+k4me3[["replicate"]] <- "H3K4me3"
+
+# Perform linear dimensional reduction
+k4me3 = RunPCA(k4me3, features = VariableFeatures(object = k4me3))
+k4me3 = FindNeighbors(k4me3, dims = 1:10)
+k4me3 = FindClusters(k4me3, resolution = 0.5)
+# Run non-linear dimensional reduction
+k4me3 = RunUMAP(
+  k4me3,
+  dims = 1:10,
+  n.neighbors = 40,
+  n.components = 2
+)
+k4me3_umap = DimPlot(k4me3, reduction = "umap")
+k4me3_umap
+
+ggsave(
+  glue("{result_folder}UMAP_H3K4me3_scCT_Marek.png"),
+  plot = k4me3_umap,
+  width = 10,
+  height = 10,
+  dpi = 300,
+)
+
+# load scRNA rep1 data and integrate:
+rna1 = readRDS(glue("{result_folder}scRNASeq_GSM4979874_rep1.rds"))
+
+# integrate the H3K4me3 data with scRNA-Seq rep1 by CCA-based Seurat integration protocol
+int = list(rna1, k4me3)
+rm(rna1)
+rm(k4me3)
+
+# anchor finding (searching best "buddies")
+rna1_k4me3_anchors = FindIntegrationAnchors(object.list = int,
+                                 anchor.features = 2000,
+                                 dims = 1:30)
+rm(int)
+
+rna1_k4me3_integrate = IntegrateData(anchorset = rna1_k4me3_anchors, dims = 1:30)
+DefaultAssay(rna1_k4me3_integrate) = "integrated"
+rm(rna1_k4me3_anchors)
+
+rna1_k4me3_integrate = ScaleData(rna1_k4me3_integrate, do.center = T, do.scale = F)
+rna1_k4me3_integrate = RunPCA(
+  rna1_k4me3_integrate,
+  npcs = 40,
+  ndims.print = 1:5,
+  nfeatures.print = 5
+)
+Idents(rna1_k4me3_integrate) = "replicate"
+
+# PCA
+rna1_k4me3_pca_int = DimPlot(
+  rna1_k4me3_integrate,
+  dims = c(1, 2),
+  reduction = "pca",
+  split.by = "replicate"
+)
+rna1_k4me3_pca_int
+
+ggsave(
+  glue("{result_folder}PCA_integrated_H3K4me3-scRNASeq_Marek.png"),
+  plot = rna1_k4me3_pca_int,
+  width = 10,
+  height = 10,
+  dpi = 300,
+)
+
+# UMAP
+rna1_k4me3_integrate <-
+  RunUMAP(
+    rna1_k4me3_integrate,
+    dims = 1:30,
+    reduction = "pca",
+    n.neighbors = 15,
+    min.dist = 0.5,
+    spread = 1,
+    metric = "euclidean",
+    seed.use = 1
+  )
+rna1_k4me3_umap_int1 <-
+  DimPlot(rna1_k4me3_integrate, reduction = "umap", group.by = "seurat_clusters")
+rna1_k4me3_umap_int1
+rna1_k4me3_umap_int2 <-
+  DimPlot(rna1_k4me3_integrate, reduction = "umap", group.by = "replicate")
+rna1_k4me3_umap_int2
+rna1_k4me3_umap_int3 <-
+DimPlot(rna1_k4me3_integrate, reduction = "umap", group.by = "cell_type")
+rna1_k4me3_umap_int3
+rna1_k4me3_umap_grid = plot_grid(rna1_k4me3_umap_int1,
+                                 rna1_k4me3_umap_int2,
+                                 rna1_k4me3_umap_int3)
+
+ggsave(
+  glue("{result_folder}UMAP_integrated_H3K4me3-scRNASeq_Marek.png"),
+  plot = rna1_k4me3_umap_grid,
+  width = 10,
+  height = 10,
+  dpi = 300,
+)
+
+# exporting integrated Seurat object
+saveRDS(rna1_k4me3_integrate, glue("{result_folder}integration/H3K4me3_scRNA-Seq_Marek.Rds"))
 
 

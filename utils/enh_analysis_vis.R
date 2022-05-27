@@ -9,179 +9,193 @@ suppressPackageStartupMessages({
   library("cowplot")
 })
 
-enhancer_anal = "../results/GenomicRanges/"
+result_folder = "../results/GenomicRanges/"
+enhancer_anal = "../results/Seurat/callpeaks_GFPsorted/"
 collect = fread(glue("{enhancer_anal}enhancer_analysis_output.tsv"))
 
-cm_bar = collect %>%
-  mutate(Cruz_Molina_enh = as.numeric(Cruz_Molina_enh)) %>%
-  group_by(Seurat_cluster) %>%
-  summarize(sum = sum(Cruz_Molina_enh)) %>%
-  mutate(Seurat_cluster = as.character(Seurat_cluster)) %>%
-  ungroup() %>%
-  ggplot(data = ., aes(
-    x = reorder(Seurat_cluster, -sum),
-    y = sum,
-    fill = Seurat_cluster
-  )) +
-  geom_bar(stat = "identity",
-           width = 0.5,
-           color = "black") +
-  scale_fill_brewer(palette = "YlOrRd") +
-  ylim(0, 12) +
-  scale_y_continuous(breaks = seq(0, 12, 1)) +
-  labs(
-    title = expression(
-      paste(
-        "G4 (peaks above 75th perc) overlaps with active enhancers of ",
-        italic("Cruz-Molina et al.")
-      )
-    ),
-    x = "Seurat cluster",
-    y = "# of G4 - active enhancer overlaps",
-    fill = "Seurat cluster"
-  ) +
-  theme_classic() +
-  theme(
-    text = element_text(size = 20),
-    plot.title = element_text(size = 15),
-    axis.text.x = element_text(size = 13, color = "black")
+bars = function(peak_summary_table, prefix = "90th") {
+  
+  cm_bar = peak_summary_table %>%
+    dplyr::mutate(Cruz_Molina_enh = as.numeric(Cruz_Molina_enh)) %>%
+    group_by(Seurat_cluster) %>%
+    summarize(sum = sum(Cruz_Molina_enh)) %>%
+    dplyr::mutate(Seurat_cluster = as.character(Seurat_cluster)) %>%
+    ungroup() %>%
+    ggplot(data = ., aes(
+      x = reorder(Seurat_cluster, -sum),
+      y = sum,
+      fill = Seurat_cluster
+    )) +
+    geom_bar(stat = "identity",
+             width = 0.5,
+             color = "black") +
+    scale_fill_brewer(palette = "YlOrRd") +
+    ylim(0, 12) +
+    scale_y_continuous(breaks = seq(0, 12, 1)) +
+    labs(
+      title = expression(
+        paste(
+          glue("G4 (peaks above {prefix} perc) overlaps with active enhancers of "),
+          italic("Cruz-Molina et al."))
+      ),
+      x = "Seurat cluster",
+      y = "# of G4 - active enhancer overlaps",
+      fill = "Seurat cluster"
+    ) +
+    theme_classic() +
+    theme(
+      text = element_text(size = 20),
+      plot.title = element_text(size = 15),
+      axis.text.x = element_text(size = 13, color = "black")
+    )
+  cm_bar
+  
+  ggsave(
+    glue("{result_folder}{prefix}_G4_overlaps_w_CruzM_active_enh.png"),
+    plot = cm_bar,
+    width = 10,
+    height = 10,
+    dpi = 300,
   )
-cm_bar
-
-ggsave(
-  glue("{enhancer_anal}signG4_overlaps_w_CruzM_active_enh.png"),
-  plot = cm_bar,
-  width = 10,
-  height = 10,
-  dpi = 300,
-)
-
-gl_bar = collect %>%
-  mutate(Glaser_enh = as.numeric(Glaser_enh)) %>%
-  group_by(Seurat_cluster) %>%
-  summarize(sum = sum(Glaser_enh)) %>%
-  mutate(Seurat_cluster = as.character(Seurat_cluster)) %>%
-  ungroup() %>%
-  ggplot(data = ., aes(
-    x = reorder(Seurat_cluster, -sum),
-    y = sum,
-    fill = Seurat_cluster
-  )) +
-  geom_bar(stat = "identity",
-           width = 0.5,
-           color = "black") +
-  scale_fill_brewer(palette = "YlOrRd") +
-  ylim(0, 12) +
-  scale_y_continuous(breaks = seq(0, 12, 1)) +
-  labs(
-    title = expression(
-      paste(
-        "G4 (peaks above 75th perc) overlaps with active enhancers of ",
-        italic("Glaser et al.")
-      )
-    ),
-    x = "Seurat cluster",
-    y = "# of G4 - active enhancer overlaps",
-    fill = "Seurat cluster"
-  ) +
-  theme_classic() +
-  theme(
-    text = element_text(size = 20),
-    plot.title = element_text(size = 15),
-    axis.text.x = element_text(size = 13, color = "black")
+  
+  gl_bar = peak_summary_table %>%
+    mutate(Glaser_enh = as.numeric(Glaser_enh)) %>%
+    group_by(Seurat_cluster) %>%
+    summarize(sum = sum(Glaser_enh)) %>%
+    mutate(Seurat_cluster = as.character(Seurat_cluster)) %>%
+    ungroup() %>%
+    ggplot(data = ., aes(
+      x = reorder(Seurat_cluster, -sum),
+      y = sum,
+      fill = Seurat_cluster
+    )) +
+    geom_bar(stat = "identity",
+             width = 0.5,
+             color = "black") +
+    scale_fill_brewer(palette = "YlOrRd") +
+    ylim(0, 12) +
+    scale_y_continuous(breaks = seq(0, 12, 1)) +
+    labs(
+      title = expression(
+        paste(
+          "G4 (peaks above 90th perc) overlaps with active enhancers of ",
+          italic("Glaser et al.")
+        )
+      ),
+      x = "Seurat cluster",
+      y = "# of G4 - active enhancer overlaps",
+      fill = "Seurat cluster"
+    ) +
+    theme_classic() +
+    theme(
+      text = element_text(size = 20),
+      plot.title = element_text(size = 15),
+      axis.text.x = element_text(size = 13, color = "black")
+    )
+  gl_bar
+  
+  ggsave(
+    glue("{result_folder}{prefix}_G4_overlaps_w_Glaser_active_enh.png"),
+    plot = gl_bar,
+    width = 10,
+    height = 10,
+    dpi = 300,
   )
-gl_bar
+  
+}
 
-ggsave(
-  glue("{enhancer_anal}signG4_overlaps_w_Glaser_active_enh.png"),
-  plot = gl_bar,
-  width = 10,
-  height = 10,
-  dpi = 300,
-)
 
-tss_rank = collect %>%
-  mutate(Seurat_cluster = as.character(Seurat_cluster)) %>%
-  mutate(id = as.character(row_number())) %>%
-  mutate(Distance_to_TSS = Distance_to_TSS / 1000) %>%
-  ggplot(data = ., aes(x = reorder(id,-Distance_to_TSS), y = Distance_to_TSS)) +
-  geom_point(
-    stat = 'identity',
-    aes(col = Seurat_cluster),
-    size = 3,
-    alpha = 0.4
-  ) +
-  scale_color_brewer(palette = "YlOrRd") +
-  labs(
-    title = expression(paste("TSS distances of significant G4 peaks")),
-    x = "G4 peaks above 75th percentile",
-    y = "Distance to TSS (kb)",
-    color = "Seurat cluster"
-  ) +
-  geom_label_repel(
-    aes(label = ifelse(
-      Cruz_Molina_enh == 1 |
-        Glaser_enh == 1,
-      as.character(Gene_name),
-      ''
-    )),
-    box.padding   = 0.9,
-    max.overlaps = Inf,
-    point.padding = 0.5,
-    size = 2,
-    segment.color = 'black'
-  ) +
-  theme_classic() +
-  theme(
-    axis.text.x = element_blank(),
-    axis.ticks.x = element_blank(),
-    text = element_text(size = 20),
-    plot.title = element_text(size = 15)
+ranks = function(peak_summary_table, prefix = "90th") {
+  tss_rank = peak_summary_table %>%
+    mutate(Seurat_cluster = as.character(Seurat_cluster)) %>%
+    mutate(id = as.character(row_number())) %>%
+    mutate(Distance_to_TSS = Distance_to_TSS / 1000) %>%
+    ggplot(data = ., aes(x = reorder(id,-Distance_to_TSS), y = Distance_to_TSS)) +
+    geom_point(
+      stat = 'identity',
+      aes(col = Seurat_cluster),
+      size = 3,
+      alpha = 0.4
+    ) +
+    scale_color_brewer(palette = "YlOrRd") +
+    labs(
+      title = expression(paste("TSS distances of significant G4 peaks")),
+      x = glue("G4 peaks above {prefix} percentile"),
+      y = "Distance to TSS (kb)",
+      color = "Seurat cluster"
+    ) +
+    geom_label_repel(
+      aes(label = ifelse(
+        Cruz_Molina_enh == 1 |
+          Glaser_enh == 1,
+        as.character(Gene_name),
+        ''
+      )),
+      box.padding   = 0.9,
+      max.overlaps = Inf,
+      point.padding = 0.5,
+      size = 2,
+      segment.color = 'black'
+    ) +
+    theme_classic() +
+    theme(
+      axis.text.x = element_blank(),
+      axis.ticks.x = element_blank(),
+      text = element_text(size = 20),
+      plot.title = element_text(size = 15)
+    )
+  tss_rank
+  
+  ggsave(
+    glue("{result_folder}{prefix}_G4_TSS_distance_rank-labeled.png"),
+    plot = tss_rank,
+    width = 10,
+    height = 5,
+    dpi = 300,
   )
-tss_rank
+  
+}
 
-ggsave(
-  glue("{enhancer_anal}G4_TSS_distance_rank-labeled.png"),
-  plot = tss_rank,
-  width = 10,
-  height = 5,
-  dpi = 300,
-)
-
-tss_rank = collect %>%
-  mutate(Seurat_cluster = as.character(Seurat_cluster)) %>%
-  mutate(id = as.character(row_number())) %>%
-  mutate(Distance_to_TSS = Distance_to_TSS / 1000) %>%
-  ggplot(data = ., aes(x = reorder(id,-Distance_to_TSS), y = Distance_to_TSS)) +
-  geom_point(
-    stat = 'identity',
-    aes(col = Seurat_cluster),
-    size = 3,
-    alpha = 0.4
-  ) +
-  scale_color_brewer(palette = "YlOrRd") +
-  labs(
-    title = expression(paste("TSS distances of significant G4 peaks")),
-    x = "G4 peaks above 75th percentile",
-    y = "Distance to TSS (kb)",
-    color = "Seurat cluster"
-  ) +
-  theme_classic() +
-  theme(
-    axis.text.x = element_blank(),
-    axis.ticks.x = element_blank(),
-    text = element_text(size = 20),
-    plot.title = element_text(size = 15)
+peak_score_distr = function(peak_summary_table,
+                            variable = "signalValue") {
+  hist = peak_summary_table %>%
+    mutate(Seurat_cluster = as.character(Seurat_cluster)) %>%
+    ggplot(., aes(x = signalValue, fill = Seurat_cluster)) +
+    geom_histogram(position = "identity", alpha = 0.4) +
+    geom_density(alpha = 1.0) +
+    scale_fill_brewer(palette = "YlOrRd") +
+    labs(
+      title = "",
+      x = variable,
+      y = "Density",
+      fill = fill
+    ) +
+    theme_classic() +
+    theme(
+      text = element_text(size = 20),
+      plot.title = element_text(size = 15),
+      axis.text.x = element_text(size = 13, color = "black")
+    )
+  hist
+  
+  ggsave(
+    glue("{result_folder}{variable}_distribution.png"),
+    plot = hist,
+    width = 10,
+    height = 10,
+    dpi = 300,
   )
-tss_rank
+  
+}
 
-ggsave(
-  glue("{enhancer_anal}G4_TSS_distance_rank.png"),
-  plot = tss_rank,
-  width = 10,
-  height = 5,
-  dpi = 300,
-)
+# make bar plots
+bars(collect)
+# make ranks
+ranks(collect)
+# make histogram
+peak_score_distr(collect)
+
+
 
 peak_rank = collect %>%
   mutate(Seurat_cluster = as.character(Seurat_cluster)) %>%

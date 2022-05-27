@@ -11,6 +11,7 @@ suppressPackageStartupMessages({
   library("ArchR")
 })
 
+# export folder
 result_folder = "../results/GenomicRanges/"
 
 # data
@@ -48,7 +49,7 @@ gl_enh = GRanges(
 
 # G4 length distributions
 hist = g4_peaks %>% mutate(diff = V3 - V2) %>%
-  filter(V6 %in% c("0", "1", "2", "3", "4")) %>%
+  dplyr::filter(V6 %in% c("0", "1", "2", "3", "4")) %>%
   ggplot(., aes(x = diff, fill = V6)) +
   geom_histogram(position = "identity", alpha = 0.4) +
   geom_density(alpha = 1.0) +
@@ -58,9 +59,11 @@ hist = g4_peaks %>% mutate(diff = V3 - V2) %>%
        y = "Density",
        fill = "Seurat cluster") +
   theme_classic() +
-  theme(text = element_text(size = 20),
-        plot.title = element_text(size = 15),
-        axis.text.x = element_text(size = 13, color = "black"))
+  theme(
+    text = element_text(size = 20),
+    plot.title = element_text(size = 15),
+    axis.text.x = element_text(size = 13, color = "black")
+  )
 hist
 
 ggsave(
@@ -100,7 +103,7 @@ bar = tibble(
   fill_col = names(g4s_no_ol)
 ) %>%
   ggplot(data = ., aes(
-    x = reorder(cluster, -overlap),
+    x = reorder(cluster,-overlap),
     y = overlap,
     fill = fill_col
   )) +
@@ -118,9 +121,11 @@ bar = tibble(
     fill = "Seurat cluster"
   ) +
   theme_classic() +
-  theme(text = element_text(size = 20),
-        plot.title = element_text(size = 15),
-        axis.text.x = element_text(size = 13, color = "black"))
+  theme(
+    text = element_text(size = 20),
+    plot.title = element_text(size = 15),
+    axis.text.x = element_text(size = 13, color = "black")
+  )
 bar
 
 ggsave(
@@ -136,7 +141,8 @@ result_folder = "../results/Seurat/callpeaks_GFPsorted/"
 bw_folder = "../data/GSE157637/"
 reference = "mm10"
 
-annotation = function(narrowpeak, percentile = 0.75) {
+annotation = function(narrowpeak = "0_peaks.narrowPeak",
+                      percentile = 0.75) {
   cluster = strsplit(narrowpeak, ".narrowPeak")[[1]][1]
   print(cluster)
   np = fread(glue("{result_folder}{narrowpeak}"))
@@ -155,12 +161,14 @@ annotation = function(narrowpeak, percentile = 0.75) {
     peak = V10
   ) %>%
     separate(name, sep = "_" , into = c(".", "..", "name")) %>%
-    dplyr::select(-., -..) %>%
+    dplyr::select(-.,-..) %>%
     mutate(start = as.character(start), end = as.character(end))
   
   # create HOMER input
-  # keep peak scores with above 75th percentile
-  np = np %>% filter(signalValue >= quantile(signalValue, percentile))
+  # keep peak scores with above 90th percentile
+  np = np %>% dplyr::filter(signalValue >= quantile(signalValue, percentile))
+  write_tsv(np, glue("{result_folder}{cluster}_robust_peaks.bed"))
+  
   bed_format = np %>% dplyr::select(chrom, start, end)
   write_tsv(bed_format,
             glue("{result_folder}{cluster}.bed"),
@@ -206,8 +214,18 @@ annotation = function(narrowpeak, percentile = 0.75) {
 narrowpeaks = list.files(glue("{result_folder}"), pattern = "*.narrowPeak")
 lapply(narrowpeaks, annotation)
 
+# check package plyranges
+if("plyranges" %in% installed.packages()) {
+  print(" plyranges is OK")
+} else {
+  install.packages("plyranges")
+  library("plyranges")
+}
+
 ## complete annotated peaks with enhancer signatures
-add_enhancer_status = function(annot_peak_file) {
+add_enhancer_status = function(annot_peak_file = "0_peaks_annot.tsv") {
+  print(annot_peak_file)
+  
   annot = fread(glue("{result_folder}{annot_peak_file}"))
   cluster = strsplit(annot_peak_file, split = "_peaks_annot.tsv")[[1]][1]
   
@@ -236,10 +254,15 @@ add_enhancer_status = function(annot_peak_file) {
   
   # add Bartosovic et al. scCut&Tag data
   require("wigglescout")
-  bws = list.files(bw_folder, pattern = "*.bw", full.names = TRUE)
-  bws = bws[grep("H3K27ac", bws)]
-  labels = unname(sapply(bws, function(x)
-    str_split(x, "/")[[1]][4]))
+  bws_ac = list.files(bw_folder, pattern = "*.bw", full.names = TRUE)
+  bws_ac = bws_ac[grep("H3K27ac", bws_ac)]
+  labels_ac = unname(sapply(bws_ac, function(x)
+    str_split(x, "//")[[1]][2]))
+  
+  bws_k4 = list.files(bw_folder, pattern = "*.bw", full.names = TRUE)
+  bws_k4 = bws_k4[grep("H3K4me3", bws_k4)]
+  labels_k4 = unname(sapply(bws_k4, function(x)
+    str_split(x, "//")[[1]][2]))
   
   # convert to GRanges object
   annot_bed = annot[, 1:3]
@@ -264,20 +287,29 @@ add_enhancer_status = function(annot_peak_file) {
   annot_bed$Cruz_Molina_enh = annot$Cruz_Molina_enh
   annot_bed$Glaser_enh = annot$Glaser_enh
   
-  aggr = suppressWarnings(bw_loci(bws, annot_bed, labels = labels))
+  aggr_ac = suppressWarnings(bw_loci(bws_ac, annot_bed, labels = labels_ac))
   # left join by plyranges
-  output = join_overlap_left_directed(annot_bed, aggr)
+  output = join_overlap_left_directed(annot_bed, aggr_ac)
+  
+  bws_k4 = bws_k4[!str_detect(bws_k4, "H3K4me3_Astrocytes")]
+  labels_k4 = labels_k4[!str_detect(labels_k4, "H3K4me3_Astrocytes")]
+  aggr_k4 = 
+    suppressWarnings(bw_loci(bws_k4, annot_bed, labels = labels_k4))
+  output = join_overlap_left_directed(output, aggr_k4)
   output = as_tibble(output)
-  
-  # export
-  write_tsv(output, glue("{result_folder}{cluster}_enh_anal.tsv"))
-  
-  return(output)
-  
+
+# export
+write_tsv(output, glue("{result_folder}{cluster}_enh_anal.tsv"))
+
+return(output)
+
 }
 
 # run on all annotated peaks
+
+print(glue("####### {result_folder}"))
 annot_peaks = list.files(glue("{result_folder}"), pattern = "*peaks_annot.tsv")
+print(length(annot_peaks))
 lapply(annot_peaks, add_enhancer_status)
 
 enh_anals = list.files(glue("{result_folder}"), pattern = "*enh_anal.tsv")
@@ -287,14 +319,12 @@ collect = bind_rows(collect)
 
 ## find G4 peaks near to LTR sequences
 ltrs = fread(ltrs)
-ltrs = GRanges(
-  seqnames = ltrs$V1,
-  ranges = IRanges(
-    start = ltrs$V2,
-    end = ltrs$V3,
-    names = rep("ltrs", nrow(ltrs))
-  )
-)
+ltrs = GRanges(seqnames = ltrs$V1,
+               ranges = IRanges(
+                 start = ltrs$V2,
+                 end = ltrs$V3,
+                 names = rep("ltrs", nrow(ltrs))
+               ))
 
 sign_g4s = collect %>% dplyr::select(seqnames, start, end)
 sign_g4s = GRanges(
@@ -318,8 +348,3 @@ for (hit in ltr_ol@from) {
 
 write_tsv(collect,
           glue("{result_folder}enhancer_analysis_output.tsv"))
-
-
-
-
-
