@@ -198,7 +198,14 @@ peak_all <- GenomicRanges::reduce(c(peak0, peak1, peak2, peak3, peak4), )
 #                     .split = "category", .color = "#2ca25f", top_n = 10)
 
 input = upset_input(peak_all)
-plot_freq_intersect(input, .by = "group", 
+upset_plot = plot_freq_intersect(input, .by = "group", 
                     .levels = c("cluster 0", "cluster 1", "cluster 2", "cluster 3", "cluster 4"), 
                     .split = "category", .color = "#2ca25f", top_n = 10)
 
+ggsave(
+  glue("{result_folder}boxplot_cluster0_signacMACS2_topgenes.png"),
+  plot = cluster0,
+  width = 10,
+  height = 10,
+  dpi = 300,
+)
