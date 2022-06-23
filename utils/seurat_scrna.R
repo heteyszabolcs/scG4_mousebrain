@@ -106,6 +106,7 @@ VlnPlot(
   ncol = 3
 )
 rna2 = FindVariableFeatures(rna2, selection.method = "vst", nfeatures = 2000)
+
 # Identify the 10 most highly variable genes
 top10 = head(VariableFeatures(rna2), 10)
 
@@ -141,6 +142,11 @@ rna2 = RunUMAP(
 )
 umap2 = DimPlot(rna2, reduction = "umap")
 umap2
+
+# create normalized expression data
+rna2 = NormalizeData(rna2, normalization.method = "LogNormalize")
+lognorm = rna2[["RNA"]]@data
+writeMM(lognorm, glue("{result_folder}scRNASeq_GSM4979875_rep1_norm.mtx"))
 
 # replication 2
 ggsave(

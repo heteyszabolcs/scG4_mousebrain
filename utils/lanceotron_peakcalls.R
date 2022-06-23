@@ -13,19 +13,26 @@ suppressPackageStartupMessages({
 
 # export folder
 result_folder = "../results/GenomicRanges/"
-peak_folder = "../results/Seurat/callpeaks_GFPsorted/"
+peak_folder = "../results/Seurat/callpeaks_GFPsorted/peak_sets/"
+bed_folder = "../data/bed/"
 
 # data
-lanceotron_peaks = "../results/Seurat/callpeaks_GFPsorted/"
 cm_enh = "../data/bed/ESC_Enhancer_CruzMolina.active_mm10.bed"
 gl_enh = "../data/bed/GSE171771_FAIRE_STARR_enh_mESC.bed"
 ltrs = "../data/bed/RepMasker_lt200bp.LTRIS2.bed"
 
-list_peaks = list.files(lanceotron_peaks, pattern = "_lanceotron*")
+# filter lanceotron peak calls (e.g. peak score > 0.1)
+list_peaks = list.files(peak_folder, pattern = "_lanceotron.tsv")
+for(peak in list_peaks) {
+  cluster = str_split(peak, "_")[[1]][1]
+  peak = fread(glue("{peak_folder}{peak}"))
+  filt = peak %>% mutate(`Peak Score` = as.numeric(`Peak Score`)) %>% filter(`Peak Score` > 0.1)
+  write_tsv(filt, glue("{peak_folder}{cluster}_peaks_lanceotron_0.1.tsv"))
+}
 
 read_peaks = function(peak_set) {
   cluster = str_split(peak_set, "_")[[1]][1]
-  peak_set = fread(glue("{lanceotron_peaks}{peak_set}"))
+  peak_set = fread(glue("{peak_folder}{peak_set}"))
   peak_set = as_tibble(peak_set)
   peak_set = peak_set %>% mutate(Seurat_cluster = cluster)
   return(peak_set)
@@ -38,6 +45,10 @@ lanceotron_peaks_filt = lanceotron_peaks %>% filter(`Peak Score` >= 0.10) %>%
 
 # export filtered Lanceotron peak set
 write_tsv(lanceotron_peaks_filt, glue("{peak_folder}lanceotron_0.10filt_peak_set.tsv"))
+
+lanceotron_peaks_bed = lanceotron_peaks_filt %>% select(Chr, Start, End, `Peak Score`, Seurat_cluster)
+write_tsv(lanceotron_peaks_bed, glue("{bed_folder}lanceotron_0.10filt_peak_set.bed"), col_names = FALSE)
+write_tsv(lanceotron_peaks, glue("{peak_folder}lanceotron_peak_set.tsv"))
 
 
 hist = lanceotron_peaks_filt %>%

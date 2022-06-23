@@ -54,6 +54,8 @@ read_peaks = function(peak_set) {
                  
 list_peaks = lapply(list_peaks, read_peaks)
 archr_peaks = bind_rows(list_peaks)
+archr_peaks = archr_peaks %>% filter(score >= quantile(score, .90))
+
 
 bar = archr_peaks %>% 
   group_by(GroupReplicate) %>% 
