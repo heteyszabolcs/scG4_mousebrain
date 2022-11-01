@@ -1,0 +1,726 @@
+---
+title: "Integration of G4 Seurat object with scRNA-Seq dataset"
+output:
+  html_document:
+    df_print: paged
+  html_notebook: default
+  pdf_document: default
+params:
+  dataset: unsorted
+  seurat_object: ../results/Seurat/callpeaks_unsorted/unsorted.Rds
+  scrna_seq_data: ../data/GSE75330/
+  result_folder: ../results/Seurat/callpeaks_unsorted/
+  scrna_seq_output_folder: ../results/Seurat/
+---
+
+## Summary: 
+This notebook provides the steps below:\
+1.) Reading Marques et al. scRNA_Seq count table\
+2.) Seurat workflow\
+  - normalization\
+  - dimension reduction\
+  - UMAP visualization\
+3.) Find markers of scRNA-Seq clusters \
+4.) Integrate G4 and scRNA-Seq datasets by Seurat's FindTransferAnchors function\
+5.) UMAP visualizations
+
+```{r}
+# packages
+suppressWarnings(suppressPackageStartupMessages({
+  library("Seurat", warn.conflicts = FALSE)
+  library("Signac", warn.conflicts = FALSE)
+  library("ggplot2", warn.conflicts = FALSE)
+  library("EnsDb.Mmusculus.v79", warn.conflicts = FALSE)
+  library("ensembldb", warn.conflicts = FALSE)
+  library("GenomicRanges", warn.conflicts = FALSE)
+  library("dplyr", warn.conflicts = FALSE)
+  library("glue", warn.conflicts = FALSE)
+  library("tidyverse", warn.conflicts = FALSE)
+  library("data.table", warn.conflicts = FALSE)
+  library("gridExtra", warn.conflicts = FALSE)
+  library("cowplot", warn.conflicts = FALSE)
+  library("ggrastr", warn.conflicts = FALSE)
+  library("RColorBrewer", warn.conflicts = FALSE)
+}))
+```
+
+```{r}
+set.seed(5)
+```
+
+```{r}
+g4 = readRDS(file = params$seurat_object)
+```
+
+Marques et al. oligodendrocyte scRNA-Seq count data
+```{r}
+rna = read.table(
+  glue("{params$scrna_seq_data}GSE75330_Marques_et_al_mol_counts2.tab"),
+  stringsAsFactors = FALSE,
+  header = FALSE
+)
+annot = readRDS(file = glue("{params$scrna_seq_data}Marques2016annotation.rds"))
+
+colnames(rna) = gsub("-", "_", sub('-', '', gsub("C1-", "", rna[1,])))
+rna = rna[-1,]
+genes = rna[, 1]
+rna = rna[,-1]
+rna = as.matrix(rna)
+rna = apply(rna, 2, as.numeric)
+rownames(rna) = genes
+```
+
+Seurat workflow and clustering
+```{r}
+rna = CreateSeuratObject(counts = rna,
+                         meta.data = annot,
+                         assay = 'RNA')
+
+all.genes = rownames(rna)
+rna = NormalizeData(rna,
+                    normalization.method = "LogNormalize",
+                    scale.factor = 10000)
+rna = FindVariableFeatures(rna, selection.method = "vst", nfeatures = 2000)
+rna = ScaleData(rna, features = all.genes, verbose = FALSE)
+rna = RunPCA(rna, features = VariableFeatures(object = rna), verbose = FALSE)
+rna = RunUMAP(rna, dims = 1:20, verbose = FALSE)
+```
+
+```{r}
+new_ids = as.character(rna@meta.data$cell_class)
+new_ids[new_ids == 'PPR'] = 'VLMC'
+new_ids[new_ids == 'NFOL2'] = 'NFOL'
+new_ids[new_ids == 'NFOL1'] = 'NFOL'
+new_ids[new_ids == 'MFOL2'] = 'MFOL'
+new_ids[new_ids == 'MFOL1'] = 'MFOL'
+new_ids[new_ids == 'MOL1'] = 'MOL'
+new_ids[new_ids == 'MOL2'] = 'MOL'
+new_ids[new_ids == 'MOL3'] = 'MOL'
+new_ids[new_ids == 'MOL4'] = 'MOL'
+new_ids[new_ids == 'MOL5'] = 'MOL'
+new_ids[new_ids == 'MOL6'] = 'MOL'
+rna@meta.data$merged_cell_class = new_ids
+```
+
+
+UMAP visualization by dimension plot
+```{r}
+dim1 = DimPlot(g4,
+             pt.size = 2,
+             label.size = 7,
+             repel = TRUE,
+             raster = TRUE) +
+  scale_color_brewer(palette = "Set3") +
+  xlim(-15, 15) +
+  ylim(-15, 15) +
+  ggtitle(" ") +
+  theme(
+    text = element_text(size = 25),
+    plot.title = element_text(size = 20),
+    axis.text.x = element_text(size = 25, color = "black"),
+    axis.text.y = element_text(size = 25, color = "black")
+  )
+dim1
+dim2 = DimPlot(
+  rna,
+  pt.size = 2,
+  label.size = 7,
+  group.by = 'merged_cell_class',
+  repel = TRUE,
+  raster = TRUE
+) +
+  scale_color_brewer(palette = "Set3") +
+  xlim(-15, 15) +
+  ylim(-15, 15) +
+  ggtitle(" ") +
+  theme(
+    text = element_text(size = 25),
+    plot.title = element_text(size = 20),
+    axis.text.x = element_text(size = 25, color = "black"),
+    axis.text.y = element_text(size = 25, color = "black")
+  )
+dim2
+```
+
+Find all marker regions in scRNA-Seq dataset
+```{r}
+rna@active.ident = rna$cell_class
+markers = FindAllMarkers(rna, verbose = FALSE)
+markers.pos = markers[markers$p_val < 0.05 &
+                        markers$avg_logFC > 0.5,]
+
+write_tsv(markers,
+          glue("{params$scrna_seq_output_folder}scRNA-Seq_Marques_et_al-FindAllMarkers_output.tsv"))
+
+```
+
+Integrate G4 and scRNA-Seq datasets by Seurat\
+1.) set common genes\
+2.) find anchors between the two datasets\
+3.) imputation\
+```{r}
+# set to gene activities
+DefaultAssay(g4) = "GA"
+# set to gene expression
+DefaultAssay(rna) = "RNA"
+
+common.genes = intersect(rownames(rna), rownames(g4))
+
+# anchor identification between G4 scCnT and scRNA-Seq datasets
+transfer.anchors = FindTransferAnchors(
+  reference = rna,
+  query = g4,
+  reduction = 'cca',
+  query.assay = 'GA',
+  reference.assay = 'RNA',
+  k.filter = NA,
+  features = common.genes
+)
+
+genes.use = VariableFeatures(rna)
+refdata = GetAssayData(rna, assay = "RNA", slot = "data")[genes.use, ]
+
+# imputation - data transfer
+imputation = TransferData(
+  anchorset = transfer.anchors,
+  refdata = refdata,
+  weight.reduction = g4[["lsi"]],
+  dims = 1:50
+)
+
+g4[['RNA']] = imputation
+```
+
+save combined Seurat object
+```{r}
+saveRDS(g4, glue("{params$result_folder}{params$dataset}_int_Marques.Rds"))
+```
+
+apply Seurat workflow on coembedded data
+```{r}
+g4 = readRDS(glue("{params$result_folder}{params$dataset}_int_Marques.Rds"))
+
+rna@meta.data$data_type = "scRNA-Seq (Marques et al.)"
+g4@meta.data$data_type = "G4 scCut&Tag"
+
+coembed = merge(x = rna, y = g4)
+
+coembed = ScaleData(coembed, features = genes.use, do.scale = FALSE, verbose = FALSE)
+coembed = RunPCA(coembed, features = genes.use, verbose = FALSE)
+coembed = RunUMAP(coembed, dims = 1:30, verbose = FALSE)
+```
+
+```{r}
+# simplify cluster ids
+new_ids = as.character(coembed@meta.data$cell_class)
+new_ids[new_ids == 'PPR'] = 'VLMC'
+new_ids[new_ids == 'NFOL2'] = 'NFOL'
+new_ids[new_ids == 'NFOL1'] = 'NFOL'
+new_ids[new_ids == 'MFOL2'] = 'MFOL'
+new_ids[new_ids == 'MFOL1'] = 'MFOL'
+new_ids[new_ids == 'MOL1'] = 'MOL'
+new_ids[new_ids == 'MOL2'] = 'MOL'
+new_ids[new_ids == 'MOL3'] = 'MOL'
+new_ids[new_ids == 'MOL4'] = 'MOL'
+new_ids[new_ids == 'MOL5'] = 'MOL'
+new_ids[new_ids == 'MOL6'] = 'MOL'
+coembed@meta.data$cell_class = new_ids
+```
+
+UMAP visualizations by dimension plot
+```{r}
+coembed_cells = DimPlot(
+  coembed,
+  pt.size = 1,
+  label.size = 7,
+  group.by = 'cell_class',
+  repel = TRUE,
+  na.value = "grey50",
+  raster = TRUE
+) +
+  scale_color_brewer(palette = "Set3") +
+  xlim(-15, 15) +
+  ylim(-15, 15) +
+  ggtitle(" ") +
+  theme(
+    text = element_text(size = 25),
+    plot.title = element_text(size = 20),
+    axis.text.x = element_text(size = 25, color = "black"),
+    axis.text.y = element_text(size = 25, color = "black")
+  )
+coembed_cells
+
+coembed_cells2 = DimPlot(
+  coembed,
+  pt.size = 1,
+  label.size = 7,
+  group.by = 'cell_class',
+  repel = TRUE,
+  label = TRUE,
+  na.value = "grey50",
+  raster = TRUE
+) +
+  scale_color_brewer(palette = "Set3") +
+  xlim(-15, 15) +
+  ylim(-15, 15) +
+  ggtitle(" ") +
+  theme(
+    text = element_text(size = 25),
+    plot.title = element_text(size = 20),
+    axis.text.x = element_text(size = 25, color = "black"),
+    axis.text.y = element_text(size = 25, color = "black")
+  ) +
+  NoLegend() + NoAxes()
+coembed_cells2
+
+ggsave(
+  glue("{params$result_folder}Seurat_Marques_celltypes.pdf"),
+  plot = coembed_cells2,
+  width = 10,
+  height = 10,
+  device = "pdf"
+)
+
+coembed_gfp = DimPlot(
+  coembed,
+  pt.size = 1,
+  label.size = 7,
+  group.by = 'GFP',
+  repel = TRUE,
+  na.value = "grey0",
+  raster = TRUE
+) +
+  xlim(-15, 15) +
+  ylim(-15, 15) +
+  scale_color_manual(values = c("#bdbdbd", "#addd8e")) +
+  ggtitle(" ") +
+  theme(
+    text = element_text(size = 25),
+    plot.title = element_text(size = 20),
+    axis.text.x = element_text(size = 25, color = "black"),
+    axis.text.y = element_text(size = 25, color = "black")
+  )
+coembed_gfp
+
+coembed_clusters = DimPlot(
+  coembed,
+  pt.size = 1,
+  label.size = 7,
+  group.by = 'seurat_clusters',
+  repel = TRUE,
+  raster = TRUE
+) +
+  scale_color_brewer(palette = "Set3") +
+  xlim(-15, 15) +
+  ylim(-15, 15) +
+  ggtitle(" ") +
+  theme(
+    text = element_text(size = 25),
+    plot.title = element_text(size = 20),
+    axis.text.x = element_text(size = 25, color = "black"),
+    axis.text.y = element_text(size = 25, color = "black")
+  )
+coembed_clusters
+
+coembed_experiments = DimPlot(
+  coembed,
+  pt.size = 1,
+  label.size = 7,
+  group.by = 'data_type',
+  repel = TRUE,
+  na.value = "grey50",
+  raster = TRUE
+) +
+  scale_colour_manual(values = c("#fc9272", "#9ecae1")) +
+  xlim(-15, 15) +
+  ylim(-15, 15) +
+  ggtitle(" ") +
+  theme(
+    text = element_text(size = 25),
+    plot.title = element_text(size = 20),
+    axis.text.x = element_text(size = 25, color = "black"),
+    axis.text.y = element_text(size = 25, color = "black")
+  )
+coembed_experiments
+
+coembed@meta.data$seurat_clusters[is.na(coembed@meta.data$seurat_clusters)] = "scRNA-Seq"
+
+cols = c(
+  "scRNA-Seq" = "#bdbdbd",
+  "0" = "#de2d26",
+  "1" = "#bdbdbd",
+  "2" = "#bdbdbd",
+  "3" = "#bdbdbd",
+  "4" = "#bdbdbd",
+  "5" = "#bdbdbd",
+  "6" = "#bdbdbd"
+)
+
+coembed_cluster0 = DimPlot(
+  coembed,
+  pt.size = 1,
+  label.size = 7,
+  group.by = 'seurat_clusters',
+  repel = TRUE,
+  order = "0",
+  raster = TRUE
+) +
+  xlim(-15, 15) +
+  ylim(-15, 15) +
+  scale_colour_manual(values = cols,
+                      breaks = "0",
+                      labels = "cluster 0") +
+  ggtitle(" ") +
+  theme(
+    text = element_text(size = 25),
+    plot.title = element_text(size = 20),
+    axis.text.x = element_text(size = 25, color = "black"),
+    axis.text.y = element_text(size = 25, color = "black")
+  ) +
+  NoAxes()
+coembed_cluster0
+
+ggsave(
+  glue("{params$result_folder}Seurat_Marques_integration_cl0.pdf"),
+  plot = coembed_cluster0,
+  width = 10,
+  height = 10,
+  device = "pdf"
+)
+
+cols = c(
+  "scRNA-Seq" = "#bdbdbd",
+  "0" = "#bdbdbd",
+  "1" = "#de2d26",
+  "2" = "#bdbdbd",
+  "3" = "#bdbdbd",
+  "4" = "#bdbdbd",
+  "5" = "#bdbdbd",
+  "6" = "#bdbdbd"
+)
+
+coembed_cluster1 = DimPlot(
+  coembed,
+  pt.size = 1,
+  label.size = 7,
+  group.by = 'seurat_clusters',
+  repel = TRUE,
+  order = "1",
+  raster = TRUE
+) +
+  xlim(-15, 15) +
+  ylim(-15, 15) +
+  scale_colour_manual(values = cols,
+                      breaks = "1",
+                      labels = "cluster 1") +
+  ggtitle(" ") +
+  theme(
+    text = element_text(size = 25),
+    plot.title = element_text(size = 20),
+    axis.text.x = element_text(size = 25, color = "black"),
+    axis.text.y = element_text(size = 25, color = "black")
+  ) +
+  NoAxes()
+coembed_cluster1
+
+ggsave(
+  glue("{params$result_folder}Seurat_Marques_integration_cl1.pdf"),
+  plot = coembed_cluster1,
+  width = 10,
+  height = 10,
+  device = "pdf"
+)
+
+cols = c(
+  "scRNA-Seq" = "#bdbdbd",
+  "0" = "#bdbdbd",
+  "1" = "#bdbdbd",
+  "2" = "#de2d26",
+  "3" = "#bdbdbd",
+  "4" = "#bdbdbd",
+  "5" = "#bdbdbd",
+  "6" = "#bdbdbd"
+)
+
+coembed_cluster2 = DimPlot(
+  coembed,
+  pt.size = 1,
+  label.size = 7,
+  group.by = 'seurat_clusters',
+  repel = TRUE,
+  order = "2",
+  raster = TRUE
+) +
+  xlim(-15, 15) +
+  ylim(-15, 15) +
+  scale_colour_manual(values = cols,
+                      breaks = "2",
+                      labels = "cluster 2") +
+  ggtitle(" ") +
+  theme(
+    text = element_text(size = 25),
+    plot.title = element_text(size = 20),
+    axis.text.x = element_text(size = 25, color = "black"),
+    axis.text.y = element_text(size = 25, color = "black")
+  ) +
+  NoAxes()
+coembed_cluster2
+
+ggsave(
+  glue("{params$result_folder}Seurat_Marques_integration_cl2.pdf"),
+  plot = coembed_cluster2,
+  width = 10,
+  height = 10,
+  device = "pdf"
+)
+
+cols = c(
+  "scRNA-Seq" = "#bdbdbd",
+  "0" = "#bdbdbd",
+  "1" = "#bdbdbd",
+  "2" = "#bdbdbd",
+  "3" = "#de2d26",
+  "4" = "#bdbdbd",
+  "5" = "#bdbdbd",
+  "6" = "#bdbdbd"
+)
+
+coembed_cluster3 = DimPlot(
+  coembed,
+  pt.size = 1,
+  label.size = 7,
+  group.by = 'seurat_clusters',
+  repel = TRUE,
+  order = "3",
+  raster = TRUE
+) +
+  xlim(-15, 15) +
+  ylim(-15, 15) +
+  scale_colour_manual(values = cols,
+                      breaks = "3",
+                      labels = "cluster 3") +
+  ggtitle(" ") +
+  theme(
+    text = element_text(size = 25),
+    plot.title = element_text(size = 20),
+    axis.text.x = element_text(size = 25, color = "black"),
+    axis.text.y = element_text(size = 25, color = "black")
+  ) +
+  NoAxes()
+coembed_cluster3
+
+ggsave(
+  glue("{params$result_folder}Seurat_Marques_integration_cl3.pdf"),
+  plot = coembed_cluster3,
+  width = 10,
+  height = 10,
+  device = "pdf"
+)
+
+cols = c(
+  "scRNA-Seq" = "#bdbdbd",
+  "0" = "#bdbdbd",
+  "1" = "#bdbdbd",
+  "2" = "#bdbdbd",
+  "3" = "#bdbdbd",
+  "4" = "#de2d26",
+  "5" = "#bdbdbd",
+  "6" = "#bdbdbd"
+)
+
+coembed_cluster4 = DimPlot(
+  coembed,
+  pt.size = 1,
+  label.size = 7,
+  group.by = 'seurat_clusters',
+  repel = TRUE,
+  order = "4",
+  raster = TRUE
+) +
+  xlim(-15, 15) +
+  ylim(-15, 15) +
+  scale_colour_manual(values = cols,
+                      breaks = "4",
+                      labels = "cluster 4") +
+  ggtitle(" ") +
+  theme(
+    text = element_text(size = 25),
+    plot.title = element_text(size = 20),
+    axis.text.x = element_text(size = 25, color = "black"),
+    axis.text.y = element_text(size = 25, color = "black")
+  ) +
+  NoAxes()
+coembed_cluster4
+
+ggsave(
+  glue("{params$result_folder}Seurat_Marques_integration_cl4.pdf"),
+  plot = coembed_cluster4,
+  width = 10,
+  height = 10,
+  device = "pdf"
+)
+
+cols = c(
+  "scRNA-Seq" = "#bdbdbd",
+  "0" = "#bdbdbd",
+  "1" = "#bdbdbd",
+  "2" = "#bdbdbd",
+  "3" = "#bdbdbd",
+  "4" = "#bdbdbd",
+  "5" = "#de2d26",
+  "6" = "#bdbdbd"
+)
+
+coembed_cluster5 = DimPlot(
+  coembed,
+  pt.size = 1,
+  label.size = 7,
+  group.by = 'seurat_clusters',
+  repel = TRUE,
+  order = "5",
+  raster = TRUE
+) +
+  xlim(-15, 15) +
+  ylim(-15, 15) +
+  scale_colour_manual(values = cols,
+                      breaks = "5",
+                      labels = "cluster 5") +
+  ggtitle(" ") +
+  theme(
+    text = element_text(size = 25),
+    plot.title = element_text(size = 20),
+    axis.text.x = element_text(size = 25, color = "black"),
+    axis.text.y = element_text(size = 25, color = "black")
+  ) +
+  NoAxes()
+coembed_cluster5
+
+ggsave(
+  glue("{params$result_folder}Seurat_Marques_integration_cl5.pdf"),
+  plot = coembed_cluster5,
+  width = 10,
+  height = 10,
+  device = "pdf"
+)
+
+cols = c(
+  "scRNA-Seq" = "#bdbdbd",
+  "0" = "#bdbdbd",
+  "1" = "#bdbdbd",
+  "2" = "#bdbdbd",
+  "3" = "#bdbdbd",
+  "4" = "#bdbdbd",
+  "5" = "#bdbdbd",
+  "6" = "#de2d26"
+)
+
+coembed_cluster6 = DimPlot(
+  coembed,
+  pt.size = 1,
+  label.size = 7,
+  group.by = 'seurat_clusters',
+  repel = TRUE,
+  order = "6",
+  raster = TRUE
+) +
+  xlim(-15, 15) +
+  ylim(-15, 15) +
+  scale_colour_manual(values = cols,
+                      breaks = "6",
+                      labels = "cluster 6") +
+  ggtitle(" ") +
+  theme(
+    text = element_text(size = 25),
+    plot.title = element_text(size = 20),
+    axis.text.x = element_text(size = 25, color = "black"),
+    axis.text.y = element_text(size = 25, color = "black")
+  ) +
+  NoAxes()
+coembed_cluster6
+
+ggsave(
+  glue("{params$result_folder}Seurat_Marques_integration_cl6.pdf"),
+  plot = coembed_cluster6,
+  width = 10,
+  height = 10,
+  device = "pdf"
+)
+
+clusters = plot_grid(
+  coembed_cluster0,
+  coembed_cluster1,
+  coembed_cluster2,
+  coembed_cluster3,
+  coembed_cluster4,
+  coembed_cluster5,
+  coembed_cluster6,
+  ncol = 2,
+  nrow = 4
+)
+
+ggsave(
+  glue("{params$result_folder}Seurat_Marques_integration_cl_all.pdf"),
+  plot = clusters,
+  width = 10,
+  height = 10,
+  device = "pdf"
+)
+
+ggsave(
+  glue("{params$result_folder}Seurat_Marques_integration_cl_all.png"),
+  plot = clusters,
+  width = 10,
+  height = 10,
+  dpi = 500
+)
+
+coembed_ps = coembed_cells + coembed_gfp + coembed_clusters + coembed_experiments
+coembed_ps
+
+ggsave(
+  glue("{params$result_folder}Seurat_Marques_coembeds.pdf"),
+  plot = coembed_ps,
+  width = 16,
+  height = 6,
+  device = "pdf"
+)
+
+coembed_ps = coembed_cells + coembed_clusters
+coembed_ps
+
+ggsave(
+  glue("{params$result_folder}Seurat_Marques_coembeds.pdf"),
+  plot = coembed_ps,
+  width = 12,
+  height = 6,
+  device = "pdf"
+)
+
+umaps = plot_grid(dim1,
+                  dim2,
+                  coembed_clusters,
+                  coembed_cells,
+                  ncol = 2,
+                  nrow = 2)
+
+ggsave(
+  glue("{params$result_folder}Seurat_{params$dataset}_Marques_UMAPs.png"),
+  plot = umaps,
+  width = 12,
+  height = 12,
+  dpi = 300,
+)
+
+ggsave(
+  glue("{params$result_folder}Seurat_{params$dataset}_Marques_UMAPs.pdf"),
+  plot = umaps,
+  width = 12,
+  height = 12,
+  device = "pdf"
+)
+```
+
+
+
+
+

@@ -1,0 +1,531 @@
+---
+title: "Overlaps with bulk G4 data"
+output:
+  html_document:
+    df_print: paged
+  html_notebook: default
+  pdf_document: default
+params:
+  peak_folder: "../results/Seurat/callpeaks_mESC-MEF/peak_sets/"
+  bed_folder: "../data/bed/"
+  result_folder: "../results/GenomicRanges/mESC-MEF_outputs/"
+---
+
+## Summary: \
+This notebook provides the steps below:\
+1.) Make Venn diagrams between bulk and single-cell datasets \
+2.) generate bed files of unique or common peaks between clusters (Seurat resolution 0.1)
+
+```{r}
+# packages
+suppressPackageStartupMessages({
+  library("glue")
+  library("tidyverse")
+  library("rtracklayer")
+  library("data.table")
+  library("GenomicFeatures")
+  library("ChIPseeker")
+  library("ChIPpeakAnno")
+  library("Vennerable")
+  library("GenomicRanges")
+  library("TxDb.Mmusculus.UCSC.mm10.knownGene")
+  library("biomaRt")
+  library("wigglescout")
+  library("GenometriCorr")
+})
+```
+
+```{r}
+create_venn = function(peak1,
+                       peak2,
+                       type1,
+                       type2,
+                       filename) {
+  # filtered MACS2 peak calls
+  peak = fread(glue("{params$peak_folder}{peak1}"))
+  peak$type = type1
+  peak = GRanges(
+    seqnames = peak$V1,
+    ranges = IRanges(
+      start = peak$V2,
+      end = peak$V3,
+      names = peak$type,
+    )
+  )
+  
+  bulk_peak = fread(glue("{params$bed_folder}{peak2}"))
+  bulk_peak$type = type2
+  bulk_peak = GRanges(
+    seqnames = bulk_peak$V1,
+    ranges = IRanges(
+      start = bulk_peak$V2,
+      end = bulk_peak$V3,
+      names = bulk_peak$type,
+    )
+  )
+  
+  peak$type = type1
+  bulk_peak$type = type2
+  gr = c(peak, bulk_peak)
+  grl = splitAsList(gr, gr$type)
+  grl = unique(grl)
+  
+  res = makeVennDiagram(Peaks = grl, NameOfPeaks = names(grl))
+  
+  venn_cnt2venn <- function(venn_cnt) {
+    n <- which(colnames(venn_cnt) == "Counts") - 1
+    SetNames = colnames(venn_cnt)[1:n]
+    Weight = venn_cnt[, "Counts"]
+    names(Weight) <- apply(venn_cnt[, 1:n], 1, paste, collapse = "")
+    Venn(SetNames = SetNames, Weight = Weight)
+  }
+  
+  pdf(
+    file = glue("{params$result_folder}{filename}"),
+    # The directory you want to save the file in
+    width = 8,
+    height = 8
+  )
+  v <- venn_cnt2venn(res$vennCounts)
+  print(plot(v, doWeights = FALSE))
+  dev.off()
+  
+}
+```
+
+```{r}
+# list of narrowpeaks
+narrowpeaks = list.files(params$peak_folder, pattern = "*.narrowPeak")
+narrowpeaks
+```
+
+Venn with 3 sets - __bulk NPC and cluster0/1 of unsorted scCnT__ \
+peak sets: \
+cluster 0 and 1: MACS2 peaks following CallPeaks of Seurat \
+bulk_peak: MACS2 peaks of bulk NPC CnT
+```{r}
+# cluster 0 of brain dataset
+cluster0_unsorted = fread("../results/Seurat/callpeaks_unsorted/peak_sets/0_peaks_res0.1.narrowPeak")
+cluster0_unsorted$type = "cluster0"
+cluster0_unsorted = GRanges(
+  seqnames = cluster0_unsorted$V1,
+  ranges = IRanges(
+    start = cluster0_unsorted$V2,
+    end = cluster0_unsorted$V3,
+    names = cluster0_unsorted$type,
+  )
+)
+
+# cluster 1 of brain dataset
+cluster1_unsorted = fread("../results/Seurat/callpeaks_unsorted/peak_sets/1_peaks_res0.1.narrowPeak")
+cluster1_unsorted$type = "cluster1"
+cluster1_unsorted = GRanges(
+  seqnames = cluster1_unsorted$V1,
+  ranges = IRanges(
+    start = cluster1_unsorted$V2,
+    end = cluster1_unsorted$V3,
+    names = cluster1_unsorted$type,
+  )
+)
+
+# bulk NPC
+bulk_peak = fread("../data/bed/bulk_CnT_G4_NPC_mm10.bed")
+bulk_peak$type = "NPC_bulk_CnT"
+bulk_peak = GRanges(
+  seqnames = bulk_peak$V1,
+  ranges = IRanges(
+    start = bulk_peak$V2,
+    end = bulk_peak$V3,
+    names = bulk_peak$type,
+  )
+)
+
+# making Venn
+cluster0_unsorted$type = "cluster_0"
+cluster1_unsorted$type = "cluster_1"
+bulk_peak$type = "NPC_bulk_CnT"
+gr = c(cluster0_unsorted, cluster1_unsorted, bulk_peak)
+grl = splitAsList(gr, gr$type)
+grl = unique(grl)
+
+res = makeVennDiagram(Peaks = grl, NameOfPeaks = names(grl))
+
+venn_cnt2venn <- function(venn_cnt) {
+  n <- which(colnames(venn_cnt) == "Counts") - 1
+  SetNames = colnames(venn_cnt)[1:n]
+  Weight = venn_cnt[, "Counts"]
+  names(Weight) <- apply(venn_cnt[, 1:n], 1, paste, collapse = "")
+  Venn(SetNames = SetNames, Weight = Weight)
+}
+
+pdf(
+  file = glue("{params$result_folder}bulk_NPC_MEF-MESCcluster0_1.pdf"),
+  # The directory you want to save the file in
+  width = 8,
+  height = 8
+)
+v <- venn_cnt2venn(res$vennCounts)
+print(plot(v, doWeights = FALSE))
+dev.off()
+```
+Venn with 3 sets - __bulk MEF and cluster0/1 of mESC-MEF scCnT__\
+
+peak sets: \
+cluster 0 and 1: MACS2 peaks following CallPeaks of Seurat \
+bulk_peak: MACS2 peaks of bulk mESC CnT
+```{r}
+# cluster 0 of mESC-MEF dataset
+cluster0 = fread("../results/Seurat/callpeaks_mESC-MEF/peak_sets/0_peaks_res0.1.narrowPeak")
+cluster0$type = "cluster0"
+cluster0 = GRanges(
+  seqnames = cluster0$V1,
+  ranges = IRanges(
+    start = cluster0$V2,
+    end = cluster0$V3,
+    names = cluster0$type,
+  )
+)
+
+# cluster 1 of mESC-MEF dataset
+cluster1 = fread("../results/Seurat/callpeaks_mESC-MEF/peak_sets/1_peaks_res0.1.narrowPeak")
+cluster1$type = "cluster1"
+cluster1 = GRanges(
+  seqnames = cluster1$V1,
+  ranges = IRanges(
+    start = cluster1$V2,
+    end = cluster1$V3,
+    names = cluster1$type,
+  )
+)
+
+# bulk MEF
+bulk_peak = fread("../data/bed/bulk_G4_CnT_MEF_rep1_R1.mLb.clN_peaks.broadPeak")
+bulk_peak$type = "MEF_bulk_CnT"
+bulk_peak = GRanges(
+  seqnames = bulk_peak$V1,
+  ranges = IRanges(
+    start = bulk_peak$V2,
+    end = bulk_peak$V3,
+    names = bulk_peak$type,
+  )
+)
+
+# making Venn
+cluster0$type = "cluster_0"
+cluster1$type = "cluster_1"
+bulk_peak$type = "MEF_bulk_CnT"
+gr = c(cluster0, cluster1, bulk_peak)
+grl = splitAsList(gr, gr$type)
+grl = unique(grl)
+
+res = makeVennDiagram(Peaks = grl, NameOfPeaks = names(grl))
+
+venn_cnt2venn <- function(venn_cnt) {
+  n <- which(colnames(venn_cnt) == "Counts") - 1
+  SetNames = colnames(venn_cnt)[1:n]
+  Weight = venn_cnt[, "Counts"]
+  names(Weight) <- apply(venn_cnt[, 1:n], 1, paste, collapse = "")
+  Venn(SetNames = SetNames, Weight = Weight)
+}
+
+pdf(
+  file = glue("{params$result_folder}bulk_mESC_MEF-MEFcluster0_1.pdf"),
+  # The directory you want to save the file in
+  width = 8,
+  height = 8
+)
+v <- venn_cnt2venn(res$vennCounts)
+print(plot(v, doWeights = FALSE))
+dev.off()
+
+```
+Venn with 3 sets - __bulk mESC and cluster0/1 of mESC-MEF scCnT__ \
+peak sets: \
+cluster 0 and 1: MACS2 peaks following CallPeaks of Seurat \
+bulk_peak: MACS2 peaks of bulk mESC CnT
+```{r}
+# Venn with 3 sets - bulk mESC and cluster0/1 of mESC-MEF scCnT
+cluster0 = fread("../results/Seurat/callpeaks_mESC-MEF/peak_sets/0_peaks_res0.1.narrowPeak")
+cluster0$type = "cluster0"
+cluster0 = GRanges(
+  seqnames = cluster0$V1,
+  ranges = IRanges(
+    start = cluster0$V2,
+    end = cluster0$V3,
+    names = cluster0$type,
+  )
+)
+
+cluster1 = fread("../results/Seurat/callpeaks_mESC-MEF/peak_sets/1_peaks_res0.1.narrowPeak")
+cluster1$type = "cluster1"
+cluster1 = GRanges(
+  seqnames = cluster1$V1,
+  ranges = IRanges(
+    start = cluster1$V2,
+    end = cluster1$V3,
+    names = cluster1$type,
+  )
+)
+
+bulk_peak = fread("../data/bed/bulk_CnT_G4_mES_mm10.bed")
+bulk_peak$type = "mESC_bulk_CnT"
+bulk_peak = GRanges(
+  seqnames = bulk_peak$V1,
+  ranges = IRanges(
+    start = bulk_peak$V2,
+    end = bulk_peak$V3,
+    names = bulk_peak$type,
+  )
+)
+
+cluster0$type = "cluster_0"
+cluster1$type = "cluster_1"
+bulk_peak$type = "mESC_bulk_CnT"
+gr = c(cluster0, cluster1, bulk_peak)
+grl = splitAsList(gr, gr$type)
+grl = unique(grl)
+
+res = makeVennDiagram(Peaks = grl, NameOfPeaks = names(grl))
+
+venn_cnt2venn <- function(venn_cnt) {
+  n <- which(colnames(venn_cnt) == "Counts") - 1
+  SetNames = colnames(venn_cnt)[1:n]
+  Weight = venn_cnt[, "Counts"]
+  names(Weight) <- apply(venn_cnt[, 1:n], 1, paste, collapse = "")
+  Venn(SetNames = SetNames, Weight = Weight)
+}
+
+pdf(
+  file = glue("{params$result_folder}bulk_mESC_MEF-MESCcluster0_1.pdf"),
+  # The directory you want to save the file in
+  width = 8,
+  height = 8
+)
+v <- venn_cnt2venn(res$vennCounts)
+print(plot(v, doWeights = FALSE))
+dev.off()
+```
+__brain scCnT overlaps__ \
+Determine unique cluster 0/1 and common peaks by wigglescout. \
+Definition of uniqueness: 4-fold difference between the two clusters \
+Common peaks: findOverlaps (GenomicRanges) with "any" parameter \
+
+Output bed files are the input of deeptools heatmaps
+```{r}
+bed_output = "../results/GenomicRanges/unsorted_outputs/bulk_overlaps/"
+peak_set = "../results/Seurat/callpeaks_unsorted/peak_sets/"
+bigwigs = "../results/Seurat/callpeaks_unsorted/cluster_bigwigs/"
+list.files(bigwigs)
+
+# scCnT data
+cluster0 = fread(glue("{peak_set}0_peaks_res0.1.narrowPeak"))
+
+cluster0_gr = GRanges(
+  seqnames = cluster0$V1,
+  ranges = IRanges(
+    start = cluster0$V2,
+    end = cluster0$V3,
+    signalValue = cluster0$V7
+  )
+)
+
+cluster1 = fread(glue("{peak_set}1_peaks_res0.1.narrowPeak"))
+
+cluster1_gr = GRanges(
+  seqnames = cluster1$V1,
+  ranges = IRanges(
+    start = cluster1$V2,
+    end = cluster1$V3,
+    signalValue = cluster1$V7
+  )
+)
+
+all = rbind(cluster0, cluster1)
+all = all %>% mutate(type = "unsorted")
+
+all = GRanges(
+  seqnames = all$V1,
+  ranges = IRanges(
+    start = all$V2,
+    end = all$V3,
+    signalValue = all$V7
+  )
+)
+
+read_cov = bw_loci(glue(bigwigs, "0_res0.1_oligo.bw"), glue(bigwigs, "1_res0.1_brain_cells.bw") , loci = all)
+read_cov = as.data.frame(read_cov)
+read_cov = inner_join(read_cov, as.data.frame(all), by = c("seqnames", "start", "end"))
+
+# only cluster 0 peaks (4-fold difference between cluster 0 and 1)
+only_cluster0 = read_cov %>% dplyr::filter(!X0_res0.1_oligo == Inf) %>% 
+  dplyr::filter(X0_res0.1_oligo >= 4) %>% 
+  dplyr::select(seqnames, start, end, signalValue)
+
+write_tsv(only_cluster0, glue("{peak_set}0_unique_peaks_res0.1.tsv"))
+
+only_cluster0 = only_cluster0 %>% dplyr::select(seqnames, start, end)
+
+write.table(
+  only_cluster0,
+  glue("{bed_output}MACS2_cl0_only.bed"),
+  quote = FALSE,
+  sep = "\t",
+  row.names = FALSE,
+  col.names = FALSE
+)
+
+read_cov = bw_loci(glue(bigwigs, "1_res0.1_brain_cells.bw"), glue(bigwigs, "0_res0.1_oligo.bw") , loci = all)
+read_cov = as.data.frame(read_cov)
+read_cov = inner_join(read_cov, as.data.frame(all), by = c("seqnames", "start", "end"))
+
+only_cluster1 = read_cov %>% dplyr::filter(!X1_res0.1_brain_cells == Inf) %>% 
+  dplyr::filter(X1_res0.1_brain_cells >= 4) %>% 
+  dplyr::select(seqnames, start, end, signalValue)
+
+write_tsv(only_cluster1, glue("{peak_set}1_unique_peaks_res0.1.tsv"))
+
+# only cluster 1 peaks (4-fold difference between cluster 1 and 0)
+only_cluster1 = only_cluster1 %>% dplyr::select(seqnames, start, end)
+
+write.table(
+  only_cluster1,
+  glue("{bed_output}MACS2_cl1_only.bed"),
+  quote = FALSE,
+  sep = "\t",
+  row.names = FALSE,
+  col.names = FALSE
+)
+
+## overlap between cluster 0,1
+ol = findOverlaps(cluster0_gr, cluster1_gr, type = "any", ignore.strand = FALSE)
+
+# intersection
+both = cluster0_gr[queryHits(ol)]
+both = data.frame(
+  seqnames = seqnames(both),
+  starts = start(both) - 1,
+  ends = end(both)
+)
+
+write.table(
+  both,
+  glue("{bed_output}MACS2_intersection.bed"),
+  quote = FALSE,
+  sep = "\t",
+  row.names = FALSE,
+  col.names = FALSE
+)
+```
+
+__mESC-MEF scCnT overlaps__ \
+Determine unique cluster 0/1 and common peaks by wigglescout. \
+Definition of uniqueness: 4-fold difference between the two clusters \
+Common peaks: findOverlaps (GenomicRanges) with "any" parameter \
+
+Output bed files are the input of deeptools heatmaps 
+```{r}
+bed_output = "../results/GenomicRanges/mESC-MEF_outputs/bulk_overlaps/"
+peak_set = "../results/Seurat/callpeaks_mESC-MEF/peak_sets/"
+bigwigs = "../results/Seurat/callpeaks_mESC-MEF/cluster_bigwigs/"
+list.files(bigwigs)
+
+# scCnT data
+cluster0 = fread(glue("{peak_set}0_peaks_res0.1.narrowPeak"))
+
+cluster0_gr = GRanges(
+  seqnames = cluster0$V1,
+  ranges = IRanges(
+    start = cluster0$V2,
+    end = cluster0$V3,
+    signalValue = cluster0$V7
+  )
+)
+
+cluster1 = fread(glue("{peak_set}1_peaks_res0.1.narrowPeak"))
+
+cluster1_gr = GRanges(
+  seqnames = cluster1$V1,
+  ranges = IRanges(
+    start = cluster1$V2,
+    end = cluster1$V3,
+    signalValue = cluster1$V7
+  )
+)
+
+all = rbind(cluster0, cluster1)
+all = all %>% mutate(type = "unsorted")
+
+all = GRanges(
+  seqnames = all$V1,
+  ranges = IRanges(
+    start = all$V2,
+    end = all$V3,
+    signalValue = all$V7
+  )
+)
+
+read_cov = bw_loci(glue(bigwigs, "0_res0.1.bigwig"), glue(bigwigs, "1_res0.1.bigwig") , loci = all)
+read_cov = as.data.frame(read_cov)
+read_cov = inner_join(read_cov, as.data.frame(all), by = c("seqnames", "start", "end"))
+
+# only cluster 0 peaks (4-fold difference between cluster 0 and 1)
+only_cluster0 = read_cov %>% dplyr::filter(!X0_res0.1 == Inf) %>% 
+  dplyr::filter(X0_res0.1 >= 4) %>% 
+  dplyr::select(seqnames, start, end, signalValue)
+
+write_tsv(only_cluster0, glue("{peak_set}0_unique_peaks_res0.1.tsv"))
+
+only_cluster0 = only_cluster0 %>% dplyr::select(seqnames, start, end)
+
+write.table(
+  only_cluster0,
+  glue("{bed_output}MACS2_cl0_only.bed"),
+  quote = FALSE,
+  sep = "\t",
+  row.names = FALSE,
+  col.names = FALSE
+)
+
+read_cov = bw_loci(glue(bigwigs, "1_res0.1.bigwig"), glue(bigwigs, "0_res0.1.bigwig") , loci = all)
+read_cov = as.data.frame(read_cov)
+read_cov = inner_join(read_cov, as.data.frame(all), by = c("seqnames", "start", "end"))
+
+only_cluster1 = read_cov %>% dplyr::filter(!X1_res0.1 == Inf) %>% 
+  dplyr::filter(X1_res0.1 >= 4) %>% 
+  dplyr::select(seqnames, start, end, signalValue)
+
+write_tsv(only_cluster1, glue("{peak_set}1_unique_peaks_res0.1.tsv"))
+
+# only cluster 1 peaks (4-fold difference between cluster 1 and 0)
+only_cluster1 = only_cluster1 %>% dplyr::select(seqnames, start, end)
+
+write.table(
+  only_cluster1,
+  glue("{bed_output}MACS2_cl1_only.bed"),
+  quote = FALSE,
+  sep = "\t",
+  row.names = FALSE,
+  col.names = FALSE
+)
+
+## overlap between cluster 0,1
+ol = findOverlaps(cluster0_gr, cluster1_gr, type = "any", ignore.strand = FALSE)
+
+# intersection
+both = cluster0_gr[queryHits(ol)]
+both = data.frame(
+  seqnames = seqnames(both),
+  starts = start(both) - 1,
+  ends = end(both)
+)
+
+write.table(
+  both,
+  glue("{bed_output}MACS2_intersection.bed"),
+  quote = FALSE,
+  sep = "\t",
+  row.names = FALSE,
+  col.names = FALSE
+)
+```
+

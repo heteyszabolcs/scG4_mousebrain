@@ -1,0 +1,414 @@
+---
+title: "Seurat workflow and cluster-specific peak calling"
+output: html_notebook
+params:
+  dataset: "unsorted"
+  cellranger_output: "../data/CellRanger/unsorted/"
+  result_folder: "../results/Seurat/callpeaks_unsorted/"
+  seurat_resolution: 0.8
+---
+
+## Summary: 
+This notebook provides the steps below:\
+1.) Reading and processing h5 CellRanger output\
+2.) Seurat workflow\
+  - give annotations\
+  - normalization\
+  - dimension reduction\
+  - UMAP visualizations\
+3.) Find marker regions \
+4.) peaks assay\
+  - gene activity assay\
+  - Cluster-specific peak calling (CallPeaks function)\
+  
+seurat_resolution parameter: \
+  by default: 0.8\
+  strict: 0.1\
+
+
+
+```{r}
+suppressPackageStartupMessages({
+  library("Seurat", warn.conflicts = FALSE)
+  library("Signac", warn.conflicts = FALSE )
+  library("glue", warn.conflicts = FALSE)
+  library("tidyverse", warn.conflicts = FALSE)
+  library("rtracklayer", warn.conflicts = FALSE)
+  library("EnsDb.Mmusculus.v79", warn.conflicts = FALSE)
+  library("GenomicFeatures", warn.conflicts = FALSE)
+  library("GenomeInfoDb", warn.conflicts = FALSE)
+  library("cowplot", warn.conflicts = FALSE)
+  library("Matrix", warn.conflicts = FALSE)
+  # library("DoubletFinder")
+})
+```
+
+
+```{r}
+set.seed(5)
+```
+
+read and process data
+```{r}
+counts = Read10X_h5(filename = glue("{params$cellranger_output}filtered_peak_bc_matrix.h5"))
+metadata = read.csv(
+  file = glue("{params$cellranger_output}singlecell.csv"),
+  header = TRUE,
+  row.names = 1
+)
+
+chrom_assay = CreateChromatinAssay(
+  counts = counts,
+  sep = c(":", "-"),
+  genome = "mm10",
+  fragments = glue("{params$cellranger_output}fragments.tsv.gz"),
+  min.cells = 10,
+  min.features = 200
+)
+
+```
+
+Seurat workflow and clustering
+```{r}
+g4 = CreateSeuratObject(counts = chrom_assay,
+                        assay = "peaks",
+                        meta.data = metadata)
+
+# check peaks in GRanges format
+granges(g4)
+
+# give EnsDB mm10 annotation
+annotations = suppressWarnings(GetGRangesFromEnsDb(ensdb = EnsDb.Mmusculus.v79, verbose = FALSE))
+seqlevelsStyle(annotations) = 'UCSC'
+Annotation(g4) = annotations
+
+# normalization
+g4 = RunTFIDF(g4)
+g4 = FindTopFeatures(g4, min.cutoff = 'q0')
+g4 = RunSVD(g4)
+
+```
+
+
+Non-linear dimension reduction and clustering
+```{r}
+# Non-linear dimension reduction and clustering
+g4 = RunUMAP(object = g4,
+             reduction = 'lsi',
+             dims = 2:30,
+             verbose = FALSE)
+g4 = FindNeighbors(object = g4,
+                   reduction = 'lsi',
+                   dims = 2:30)
+g4 = FindClusters(
+  object = g4,
+  verbose = FALSE,
+  resolution = params$seurat_resolution,
+  algorithm = 3
+)
+```
+
+Find all marker regions
+```{r}
+markers = FindAllMarkers(g4, verbose = FALSE)
+
+top.markers = markers %>% group_by(cluster) %>% top_n(wt = avg_log2FC, n = 5)
+DoHeatmap(
+  object = g4,
+  features = top.markers$gene,
+  slot = 'data',
+  raster = TRUE
+) + scale_fill_gradient(low = "white",  high = "#fc9272")
+
+# export marker regions
+markers = markers %>% separate(gene, sep = "-", into = c("chr", "start", "end"), remove = TRUE) %>% 
+  dplyr::select("chr", "start", "end", everything()) %>% mutate(start = as.numeric(start), end = as.numeric(end))
+write_tsv(markers, glue("{params$result_folder}FindAllMarkers_output.tsv"))
+bed = markers %>% dplyr::select("chr", "start", "end")
+write_tsv(bed, glue("{params$result_folder}FindAllMarkers_output_bed.tsv"), col_names = FALSE)
+
+```
+
+
+UMAP visualization by dimension plot
+```{r}
+
+# 0.1 returns three clusters
+if (params$seurat_resolution == 0.1) {
+  cols = c("0" = "#addd8e",
+           "1" = "#bdbdbd",
+           "2" = "#addd8e")
+} else {
+  palette = "Set3"
+}
+
+if (params$seurat_resolution == 0.1) {
+  dim_res0.1 = DimPlot(
+    object = g4,
+    label = TRUE,
+    pt.size = 2,
+    label.size = 7,
+    repel = TRUE
+  ) +
+    #NoLegend() +
+    #scale_color_brewer(palette = "Set3") +
+    xlim(-10, 10) +
+    ylim(-10, 10) +
+    scale_colour_manual(
+      values = cols,
+      breaks = c("0", "1"),
+      labels = c("oligodendrocytes (GFP+)", "unsorted brain")
+    ) +
+    ggtitle("unsorted brain G4 scCut&Tag, res = 0.1") +
+    theme(
+      text = element_text(size = 25),
+      plot.title = element_text(size = 20),
+      axis.text.x = element_text(size = 25, color = "black"),
+      axis.text.y = element_text(size = 25, color = "black")
+    )
+  dim_res0.1
+} else {
+  dim = DimPlot(
+    object = g4,
+    label = TRUE,
+    pt.size = 2,
+    label.size = 7,
+    repel = TRUE
+  ) +
+    NoLegend() +
+    scale_color_brewer(palette = palette) +
+    xlim(-10, 10) +
+    ylim(-10, 10) +
+    ggtitle("unsorted brain G4 scCut&Tag") +
+    theme(
+      text = element_text(size = 25),
+      plot.title = element_text(size = 20),
+      axis.text.x = element_text(size = 25, color = "black"),
+      axis.text.y = element_text(size = 25, color = "black")
+    )
+  dim
+}
+
+
+
+```
+```{r}
+if (params$seurat_resolution != 0.1) {
+  dim = DimPlot(
+    object = g4,
+    label = TRUE,
+    pt.size = 2,
+    label.size = 7,
+    repel = TRUE
+  ) +
+    NoLegend() +
+    scale_color_brewer(palette = "Set3") +
+    xlim(-10, 10) +
+    ylim(-10, 10) +
+    ggtitle("unsorted brain G4 scCut&Tag") +
+    theme(
+      text = element_text(size = 25),
+      plot.title = element_text(size = 20),
+      axis.text.x = element_text(size = 25, color = "black"),
+      axis.text.y = element_text(size = 25, color = "black")
+    )
+  dim
+  
+  dim_blank = DimPlot(
+    object = g4,
+    label = TRUE,
+    pt.size = 2,
+    label.size = 7,
+    repel = TRUE
+  ) +
+    NoLegend() +
+    NoAxes() +
+    scale_color_brewer(palette = "Set3") +
+    xlim(-10, 10) +
+    ylim(-10, 10) +
+    theme(
+      text = element_text(size = 25),
+      plot.title = element_text(size = 20),
+      axis.text.x = element_text(size = 0, color = "black"),
+      axis.text.y = element_text(size = 0, color = "black")
+    )
+  dim_blank
+}
+```
+
+save plots
+```{r}
+if (params$seurat_resolution != 0.1) {
+  ggsave(
+    glue("{params$result_folder}Seurat_unsorted_UMAP.png"),
+    plot = dim,
+    width = 10,
+    height = 10,
+    dpi = 300,
+  )
+  
+  ggsave(
+    glue("{params$result_folder}Seurat_unsorted_UMAP.pdf"),
+    plot = dim,
+    device = "pdf",
+    width = 10,
+    height = 10,
+    dpi = 300,
+  )
+  
+  ggsave(
+    glue(
+      "{params$result_folder}Seurat_mESC-MEF_UMAP_blankedplot.pdf"
+    ),
+    plot = dim_blank,
+    width = 10,
+    height = 10,
+    device = "pdf"
+  )
+} else {
+  ggsave(
+    glue("{params$result_folder}Seurat_unsorted_UMAP_res0.1.png"),
+    plot = dim_res0.1,
+    width = 10,
+    height = 10,
+    dpi = 300,
+  )
+  
+  ggsave(
+    glue("{params$result_folder}Seurat_unsorted_UMAP_res0.1.pdf"),
+    plot = dim_res0.1,
+    width = 10,
+    height = 10,
+    dpi = 300,
+  )
+}
+
+```
+
+Create a gene activity matrix
+```{r}
+gene.activities = GeneActivity(g4)
+
+g4[['GA']] = CreateAssayObject(counts = gene.activities)
+g4 = NormalizeData(
+  object = g4,
+  assay = 'GA',
+  normalization.method = 'LogNormalize',
+  scale.factor = median(g4$nCount_peaks)
+)
+
+```
+
+create GA heatmap
+```{r}
+ga_markers = FindAllMarkers(g4, only.pos = TRUE, assay = "GA", verbose = FALSE)
+
+ga_top.markers = ga_markers %>% group_by(cluster) %>% top_n(wt = avg_log2FC, n = 5)
+DoHeatmap(
+  object = g4,
+  features = ga_markers$gene,
+  slot = 'data',
+  raster = TRUE,
+  assay = "GA"
+) +
+  scale_fill_gradient2(low = "white", mid = "white", high = "red") +
+  labs(title = " ", fill = "gene act. score") +
+  theme(plot.title = element_text(size = 8),
+        axis.text.y = element_text(size = 8, color = "black"))
+
+if (params$seurat_resolution == 0.1) {
+  ggsave(
+    glue("{params$result_folder}GA_heatmap_res0.1.pdf"),
+    plot = last_plot(),
+    device = "pdf",
+    width = 10,
+    height = 3
+  )
+} else {
+  ggsave(
+    glue("{params$result_folder}GA_heatmap.pdf"),
+    plot = last_plot(),
+    device = "pdf",
+    width = 10,
+    height = 3
+  )
+  
+}
+```
+
+extract cell barcodes per cluster
+```{r}
+barcodes = g4@meta.data %>%
+  rownames_to_column("barcodes") %>%
+  dplyr::select(barcodes, seurat_clusters)
+
+if (params$seurat_resolution == 0.1) {
+  write_tsv(barcodes,
+            glue("{params$result_folder}barcodes_per_cluster_res0.1.tsv"))
+} else {
+  write_tsv(barcodes, glue("{params$result_folder}barcodes_per_cluster.tsv"))
+}
+
+
+for (cluster in unique(barcodes$seurat_clusters)) {
+  subset = barcodes %>% dplyr::filter(seurat_clusters == cluster)
+  if (params$seurat_resolution == 0.1) {
+    write_tsv(
+      subset,
+      glue(
+        "{params$result_folder}barcodes_cluster_{as.character(cluster)}_res0.1.tsv"
+      ),
+      col_names = FALSE
+    )
+  } else {
+    write_tsv(
+      subset,
+      glue(
+        "{params$result_folder}barcodes_cluster_{as.character(cluster)}.tsv"
+      ),
+      col_names = FALSE
+    )
+  }
+}
+```
+
+save Seurat object
+```{r}
+if (params$seurat_resolution == 0.1) {
+  saveRDS(g4, glue("{params$result_folder}unsorted_res0.1.Rds"))
+} else {
+  saveRDS(g4, glue("{params$result_folder}unsorted.Rds"))
+}
+```
+
+call cluster-specific peaks by CallPeaks function (MACS2 is needed)
+```{r}
+peaks = CallPeaks(
+  object = g4,
+  group.by = "seurat_clusters",
+  cleanup = FALSE,
+  outdir = params$result_folder,
+  effective.genome.size = 2652783500
+)
+
+if (params$seurat_resolution == 0.1) {
+  write.table(
+    as.data.frame(peaks),
+    file = glue("{params$result_folder}peaks_per_clusters_res0.1.bed"),
+    quote = F,
+    sep = "\t",
+    row.names = F,
+    col.names = F
+  )
+} else {
+  write.table(
+    as.data.frame(peaks),
+    file = glue("{params$result_folder}peaks_per_clusters.bed"),
+    quote = F,
+    sep = "\t",
+    row.names = F,
+    col.names = F
+  )
+  
+}
+```
