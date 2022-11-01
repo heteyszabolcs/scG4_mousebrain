@@ -1,11 +1,17 @@
-library("Seurat")
-library("Signac")
-library("data.table")
-library("glue")
-library("tidyverse")
+# packages
+suppressPackageStartupMessages({
+  library("Seurat")
+  library("Signac")
+  library("data.table")
+  library("glue")
+  library("tidyverse")
+})
 
 # path to result folder
-result_path = "../results/Seurat/"
+result_path = "../results/Seurat/callpeaks_unsorted/"
+
+# merged Seurat
+merged_seurat = "../data/merged/"
 
 featureplot = function(ptm_data,
                        marker_path = "../data/markers_brain_nbiotech/",
@@ -85,9 +91,19 @@ featureplot = function(ptm_data,
 marek_data = list.files("../data/GSE157637/", pattern = "_seurat_object.Rds", full.names = TRUE)
 lapply(marek_data, featureplot)
 
+# open merged Seurat
+merged_seurat = readRDS(glue("{merged_seurat}Seurat_merged.Rds"))
 
+merged_umap = DimPlot(merged_seurat, reduction = "umap", pt.size = 3, label = TRUE) + NoLegend()
+merged_umap
 
-
+ggsave(
+  glue("{result_path}Seurat_unsorted_UMAP.png"),
+  plot = merged_umap,
+  width = 10,
+  height = 10,
+  dpi = 400,
+)
 
 
 

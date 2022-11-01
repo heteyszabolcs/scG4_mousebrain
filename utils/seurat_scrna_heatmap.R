@@ -122,6 +122,8 @@ rna = merge(rna1, y = rna2, add.cell.ids = c("replicate1", "replicate2"), projec
 rna = NormalizeData(rna,
                      normalization.method = "LogNormalize")
 
+saveRDS(rna, glue("{result_folder}scRNASeq_GSM4979874-75.rds"))
+
 rm(rna1); rm(rna2)
 rm(norm1); rm(norm2)
 

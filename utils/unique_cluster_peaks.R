@@ -2,260 +2,199 @@
 suppressPackageStartupMessages({
   library("glue")
   library("tidyverse")
-  library("rtracklayer")
   library("data.table")
-  library("GenomicFeatures")
-  library("ChIPseeker")
-  library("ChIPpeakAnno")
-  library("Vennerable")
-  library("ArchR")
-  library("GenomicRanges")
+  library("ggpubr")
   library("cowplot")
+  library("Seurat")
+  library("wigglescout")
+  library("GenomicRanges")
+  library("ChIPseeker")
+  library("TxDb.Mmusculus.UCSC.mm10.knownGene")
 })
 
 # result / peak folder
-peak_folder = "../results/Seurat/callpeaks_GFPsorted/peak_sets/"
+result_folder = "../results/Seurat/callpeaks_unsorted/"
+peaks = "../results/Seurat/callpeaks_unsorted/Grubbs_test-unique_G4_peaks_0.01_joined.tsv"
+peak_folder = "../results/Seurat/callpeaks_unsorted/peak_sets/"
+marques_scrna = "../results/Seurat/scRNASeq_GSE75330.rds"
+marques_scrna_lognorm = "../results/Seurat/scRNASeq_GSE75330_lognorm.tsv"
 
-peak_list = list.files(glue("{peak_folder}"), pattern = "^[0-9]_peaks.bed$")
+unique_peaks = fread(peaks)
+prom_peaks = unique_peaks %>% filter(abs(`Distance to TSS`) < 1500)
+genes = prom_peaks %>% pull(`Gene Name`)
 
-# generate genomicrange object
-create_gr = function(bed, name) {
-  bed = fread(glue("{peak_folder}{bed}"))
-  rownumber = nrow(bed)
-  gr = GRanges(seqnames = bed$V1,
-               ranges = IRanges(
-                 start = bed$V2,
-                 end = bed$V3,
-                 names = rep(name, rownumber)
-               ))
+marques_scrna =readRDS(marques_scrna)
+marques_scrna_lognorm = fread("../results/Seurat/scRNASeq_GSE75330_lognorm.tsv")
+marques_scrna_lognorm = marques_scrna_lognorm %>% rename(gene_name = V1)
+
+clusters = tibble("cluster" = marques_scrna@active.ident, "cell_id" = names(marques_scrna@active.ident))
+
+  # visualizations
+prom_uniques = prom_peaks %>% group_by(unique) %>% summarise(count = n()) %>% arrange(desc(count)) %>% 
+  ggplot(data = ., aes(
+    x = reorder(unique ,-count),
+    y = count,
+    fill = unique
+  )) +
+  geom_bar(stat = "identity",
+           width = 0.5,
+           color = "black") +
+  scale_fill_brewer(palette = "Reds") +
+  labs(
+    title = "# of unique G4 locations (-1.5/+1.5 kb TSS)",
+    x = "Seurat cluster",
+    y = "# of G4 structures",
+    fill = "Seurat cluster"
+  ) +
+  theme_classic() +
+  theme(
+    text = element_text(size = 20),
+    plot.title = element_text(size = 15),
+    axis.text.x = element_text(size = 13, color = "black")
+  )
+prom_uniques
+
+# ggsave(
+#   glue("{result_folder}Grubbs_test-unique_G4_peaks_bar.png"),
+#   plot = n_uniques,
+#   width = 10,
+#   height = 10,
+#   dpi = 300,
+# )
+
+get_expression = function(cell_type, g4_cluster) {
   
-  return(gr)
+  genes = prom_peaks %>% filter(unique == g4_cluster) %>% pull(`Gene Name`)
+  
+  cell_ids = clusters %>% filter(cluster == cell_type) %>% pull(cluster) %>% names
+  
+  expr = marques_scrna_lognorm %>% 
+    filter(gene_name %in% genes) %>% 
+    dplyr::select(cell_ids) %>% 
+    pivot_longer(starts_with("C"), names_to = "cell_id", values_to = "expression") %>% 
+    mutate(cell_type = cell_type, "G4_cluster" = g4_cluster) %>% 
+    dplyr::select(G4_cluster, cell_type, expression)
+  
+  return(expr)
+  
 }
 
-# Signac MACS2 peaks
-peak_list
-peak0 = create_gr(bed = "0_peaks.bed", name = "0")
-peak1 = create_gr(bed = "1_peaks.bed", name = "1")
-peak2 = create_gr(bed = "2_peaks.bed", name = "2")
-peak3 = create_gr(bed = "3_peaks.bed", name = "3")
-peak4 = create_gr(bed = "4_peaks.bed", name = "4")
+# gene = marques_scrna_lognorm %>% filter(gene_name == "Gusb") %>% t
 
-# create Venn diagram - overlap between clusters
-peak0$type = "cluster 0"
-peak1$type = "cluster 1"
-peak2$type = "cluster 2"
-peak3$type = "cluster 3"
-peak4$type = "cluster 4"
+cell_types = levels(unique(unname(marques_scrna@active.ident)))
 
-gr = c(peak0, peak1, peak2, peak3, peak4)
-grl = splitAsList(gr, gr$type)
-#grl = unique(grl)
-res = makeVennDiagram(Peaks=grl, NameOfPeaks=names(grl))
+## cluster 0
+cluster_0 = lapply(cell_types, get_expression, g4_cluster = "cluster_0")
+cluster_0 = do.call(rbind, cluster_0)
 
-venn_cnt2venn <- function(venn_cnt){
-  n <- which(colnames(venn_cnt)=="Counts") - 1
-  SetNames=colnames(venn_cnt)[1:n]
-  Weight=venn_cnt[,"Counts"]
-  names(Weight) <- apply(venn_cnt[,1:n], 1, paste, collapse="")
-  Venn(SetNames=SetNames, Weight=Weight)
-}
+cluster_0_bp = ggplot(cluster_0, aes(x = cell_type, y = expression, fill = cell_type)) +
+  geom_boxplot(color = "black") +
+  scale_fill_brewer(palette = "Reds") +
+  ylim(0, 100) +
+  labs(
+    title = "Unique promoter peaks of G4 cluster 0 (-1.5/+1.5 kb TSS)",
+    x = "scRNA-Seq (Marques et al.) Seurat cluster",
+    y = "log normalized expr.",
+    fill = "cell type"
+  ) +
+  theme_classic() +
+  theme(
+    text = element_text(size = 9),
+    plot.title = element_text(size = 10),
+    axis.text.x = element_text(size = 7, color = "black"),
+    axis.text.y = element_text(size = 7, color = "black")
+  ) +
+  stat_compare_means(label.y = 75, label.x = 3.5) +
+  stat_compare_means(label = "p.signif", method = "t.test",
+                     ref.group = ".all.", label.y = 50) 
+cluster_0_bp
 
-pdf(
-  file = glue("{peak_folder}peak_calling_per_cluster_VennPlot.pdf"),
-  # The directory you want to save the file in
-  width = 8,
-  height = 8
+## cluster 3
+cluster_3 = lapply(cell_types, get_expression, g4_cluster = "cluster_3")
+cluster_3 = do.call(rbind, cluster_3)
+
+cluster_3_bp = ggplot(cluster_3, aes(x = cell_type, y = expression, fill = cell_type)) +
+  geom_boxplot(color = "black") +
+  scale_fill_brewer(palette = "Reds") +
+  ylim(0, 100) +
+  labs(
+    title = "Unique promoter peaks of G4 cluster 3 (-1.5/+1.5 kb TSS)",
+    x = "scRNA-Seq (Marques et al.) Seurat cluster",
+    y = "log normalized expr.",
+    fill = "cell type"
+  ) +
+  theme_classic() +
+  theme(
+    text = element_text(size = 9),
+    plot.title = element_text(size = 10),
+    axis.text.x = element_text(size = 7, color = "black"),
+    axis.text.y = element_text(size = 7, color = "black")
+  ) +
+  stat_compare_means(label.y = 75, label.x = 3.5) +
+  stat_compare_means(label = "p.signif", method = "t.test",
+                     ref.group = ".all.", label.y = 50) 
+cluster_3_bp
+
+## cluster 4
+cluster_4 = lapply(cell_types, get_expression, g4_cluster = "cluster_4")
+cluster_4 = do.call(rbind, cluster_4)
+
+cluster_4_bp = ggplot(cluster_4, aes(x = cell_type, y = expression, fill = cell_type)) +
+  geom_boxplot(color = "black") +
+  scale_fill_brewer(palette = "Reds") +
+  ylim(0, 100) +
+  labs( 
+    title = "Unique promoter peaks of G4 cluster 4 (-1.5/+1.5 kb TSS)",
+    x = "scRNA-Seq (Marques et al.) Seurat cluster",
+    y = "log normalized expr.",
+    fill = "cell type"
+  ) +
+  theme_classic() +
+  theme(
+    text = element_text(size = 9),
+    plot.title = element_text(size = 10),
+    axis.text.x = element_text(size = 7, color = "black"),
+    axis.text.y = element_text(size = 7, color = "black")
+  ) +
+  stat_compare_means(label.y = 75, label.x = 3.5) +
+  stat_compare_means(label = "p.signif", method = "t.test",
+                     ref.group = ".all.", label.y = 50) 
+cluster_4_bp
+
+## cluster 5
+cluster_5 = lapply(cell_types, get_expression, g4_cluster = "cluster_5")
+cluster_5 = do.call(rbind, cluster_5)
+
+cluster_5_bp = ggplot(cluster_5, aes(x = cell_type, y = expression, fill = cell_type)) +
+  geom_boxplot(color = "black") +
+  scale_fill_brewer(palette = "Reds") +
+  ylim(0, 100) +
+  labs(
+    title = "Unique promoter peaks of G4 cluster 5 (-1.5/+1.5 kb TSS)",
+    x = "scRNA-Seq (Marques et al.) Seurat cluster",
+    y = "log normalized expr.",
+    fill = "cell type"
+  ) +
+  theme_classic() +
+  theme(
+    text = element_text(size = 9),
+    plot.title = element_text(size = 10),
+    axis.text.x = element_text(size = 7, color = "black"),
+    axis.text.y = element_text(size = 7, color = "black")
+  ) +
+  stat_compare_means(label.y = 75, label.x = 3.5) +
+  stat_compare_means(label = "p.signif", method = "t.test",
+                     ref.group = ".all.", label.y = 50) 
+cluster_5_bp
+
+bp_grid = plot_grid(cluster_0_bp, cluster_3_bp, cluster_4_bp, cluster_5_bp)
+
+ggsave(
+  glue("{result_folder}Unique_prom_G4s-expr_boxplot.png"),
+  plot = bp_grid,
+  width = 10,
+  height = 10,
+  dpi = 300,
 )
-v <- venn_cnt2venn(res$vennCounts)
-plot(v, doWeights = TRUE)
-dev.off()
 
-# cluster 0
-ol_1 = peak0[queryHits(findOverlaps(
-  peak0,
-  peak1,
-  maxgap = -1L,
-  minoverlap = 1,
-  type = c("any")
-)),]
-ol_2 = peak0[queryHits(findOverlaps(
-  peak0,
-  peak2,
-  maxgap = -1L,
-  minoverlap = 1,
-  type = c("any")
-)),]
-ol_3 = peak0[queryHits(findOverlaps(
-  peak0,
-  peak3,
-  maxgap = -1L,
-  minoverlap = 1,
-  type = c("any")
-)),]
-ol_4 = peak0[queryHits(findOverlaps(
-  peak0,
-  peak4,
-  maxgap = -1L,
-  minoverlap = 1,
-  type = c("any")
-)),]
-ol = c(ol_1, ol_2, ol_3, ol_4)
 
-unique_0 = GenomicRanges::setdiff(peak0, ol)
-unique_0 = as_tibble(unique_0)
-bed0 = unique_0[, 1:3]
-write_tsv(bed0,
-          glue("{peak_folder}unique_0_peaks_lanceotron.bed"),
-          col_names = FALSE)
-
-# cluster 1
-ol_1 = peak1[queryHits(findOverlaps(
-  peak1,
-  peak0,
-  maxgap = -1L,
-  minoverlap = 1,
-  type = c("any")
-)), ]
-ol_2 = peak1[queryHits(findOverlaps(
-  peak1,
-  peak2,
-  maxgap = -1L,
-  minoverlap = 1,
-  type = c("any")
-)), ]
-ol_3 = peak1[queryHits(findOverlaps(
-  peak1,
-  peak3,
-  maxgap = -1L,
-  minoverlap = 1,
-  type = c("any")
-)), ]
-ol_4 = peak1[queryHits(findOverlaps(
-  peak1,
-  peak4,
-  maxgap = -1L,
-  minoverlap = 1,
-  type = c("any")
-)), ]
-ol = c(ol_1, ol_2, ol_3, ol_4)
-
-unique_1 = GenomicRanges::setdiff(peak1, ol)
-unique_1 = as_tibble(unique_1)
-bed1 = unique_1[, 1:3]
-write_tsv(bed1,
-          glue("{peak_folder}unique_1_peaks_lanceotron.bed"),
-          col_names = FALSE)
-
-# cluster 2
-ol_1 = peak2[queryHits(findOverlaps(
-  peak2,
-  peak1,
-  maxgap = -1L,
-  minoverlap = 1,
-  type = c("any")
-)), ]
-ol_2 = peak2[queryHits(findOverlaps(
-  peak2,
-  peak0,
-  maxgap = -1L,
-  minoverlap = 1,
-  type = c("any")
-)), ]
-ol_3 = peak2[queryHits(findOverlaps(
-  peak2,
-  peak3,
-  maxgap = -1L,
-  minoverlap = 1,
-  type = c("any")
-)), ]
-ol_4 = peak2[queryHits(findOverlaps(
-  peak2,
-  peak4,
-  maxgap = -1L,
-  minoverlap = 1,
-  type = c("any")
-)), ]
-ol = c(ol_1, ol_2, ol_3, ol_4)
-
-unique_2 = GenomicRanges::setdiff(peak2, ol)
-unique_2 = as_tibble(unique_2)
-bed2 = unique_2[, 1:3]
-write_tsv(bed2,
-          glue("{peak_folder}unique_2_peaks_lanceotron.bed"),
-          col_names = FALSE)
-
-# cluster 3
-ol_1 = peak3[queryHits(findOverlaps(
-  peak3,
-  peak1,
-  maxgap = -1L,
-  minoverlap = 1,
-  type = c("any")
-)), ]
-ol_2 = peak3[queryHits(findOverlaps(
-  peak3,
-  peak2,
-  maxgap = -1L,
-  minoverlap = 1,
-  type = c("any")
-)), ]
-ol_3 = peak3[queryHits(findOverlaps(
-  peak3,
-  peak0,
-  maxgap = -1L,
-  minoverlap = 1,
-  type = c("any")
-)), ]
-ol_4 = peak3[queryHits(findOverlaps(
-  peak3,
-  peak4,
-  maxgap = -1L,
-  minoverlap = 1,
-  type = c("any")
-)), ]
-ol = c(ol_1, ol_2, ol_3, ol_4)
-
-unique_3 = GenomicRanges::setdiff(peak3, ol)
-unique_3 = as_tibble(unique_3)
-bed3 = unique_3[, 1:3]
-write_tsv(bed3,
-          glue("{peak_folder}unique_3_peaks_lanceotron.bed"),
-          col_names = FALSE)
-
-# cluster 4
-ol_1 = peak4[queryHits(findOverlaps(
-  peak4,
-  peak1,
-  maxgap = -1L,
-  minoverlap = 1,
-  type = c("any")
-)), ]
-ol_2 = peak4[queryHits(findOverlaps(
-  peak4,
-  peak2,
-  maxgap = -1L,
-  minoverlap = 1,
-  type = c("any")
-)), ]
-ol_3 = peak4[queryHits(findOverlaps(
-  peak4,
-  peak3,
-  maxgap = -1L,
-  minoverlap = 1,
-  type = c("any")
-)), ]
-ol_4 = peak4[queryHits(findOverlaps(
-  peak4,
-  peak0,
-  maxgap = -1L,
-  minoverlap = 1,
-  type = c("any")
-)), ]
-ol = c(ol_1, ol_2, ol_3, ol_4)
-
-unique_4 = GenomicRanges::setdiff(peak4, ol)
-unique_4 = as_tibble(unique_4)
-bed4 = unique_4[, 1:3]
-write_tsv(bed4,
-          glue("{peak_folder}unique_4_peaks_lanceotron.bed"),
-          col_names = FALSE)

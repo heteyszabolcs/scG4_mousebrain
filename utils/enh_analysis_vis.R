@@ -10,10 +10,10 @@ suppressPackageStartupMessages({
 })
 
 result_folder = "../results/GenomicRanges/"
-enhancer_anal = "../results/Seurat/callpeaks_GFPsorted/"
+enhancer_anal = "../results/Seurat/callpeaks_unsorted/peak_sets/"
 collect = fread(glue("{enhancer_anal}enhancer_analysis_output.tsv"))
 
-bars = function(peak_summary_table, prefix = "90th") {
+bars = function(peak_summary_table, prefix = "75th") {
   
   cm_bar = peak_summary_table %>%
     dplyr::mutate(Cruz_Molina_enh = as.numeric(Cruz_Molina_enh)) %>%
@@ -33,11 +33,7 @@ bars = function(peak_summary_table, prefix = "90th") {
     ylim(0, 12) +
     scale_y_continuous(breaks = seq(0, 12, 1)) +
     labs(
-      title = expression(
-        paste(
-          glue("G4 (peaks above {prefix} perc) overlaps with active enhancers of "),
-          italic("Cruz-Molina et al."))
-      ),
+      title = glue("G4 (peaks above {prefix} perc) overlaps with active enhancers of Cruz-Molina et al."),
       x = "Seurat cluster",
       y = "# of G4 - active enhancer overlaps",
       fill = "Seurat cluster"
@@ -51,11 +47,11 @@ bars = function(peak_summary_table, prefix = "90th") {
   cm_bar
   
   ggsave(
-    glue("{result_folder}{prefix}_G4_overlaps_w_CruzM_active_enh.png"),
+    glue("{result_folder}{prefix}_G4_overlaps_w_CruzM_active_enh.pdf"),
     plot = cm_bar,
-    width = 10,
-    height = 10,
-    dpi = 300,
+    width = 7,
+    height = 7,
+    device = "pdf"
   )
   
   gl_bar = peak_summary_table %>%
@@ -76,12 +72,7 @@ bars = function(peak_summary_table, prefix = "90th") {
     ylim(0, 12) +
     scale_y_continuous(breaks = seq(0, 12, 1)) +
     labs(
-      title = expression(
-        paste(
-          "G4 (peaks above 90th perc) overlaps with active enhancers of ",
-          italic("Glaser et al.")
-        )
-      ),
+      title = glue("G4 (peaks above {prefix} perc) overlaps with active enhancers of Glaser et al."),
       x = "Seurat cluster",
       y = "# of G4 - active enhancer overlaps",
       fill = "Seurat cluster"
@@ -95,17 +86,17 @@ bars = function(peak_summary_table, prefix = "90th") {
   gl_bar
   
   ggsave(
-    glue("{result_folder}{prefix}_G4_overlaps_w_Glaser_active_enh.png"),
+    glue("{result_folder}{prefix}_G4_overlaps_w_Glaser_active_enh.pdf"),
     plot = gl_bar,
     width = 10,
     height = 10,
-    dpi = 300,
+    device = "pdf",
   )
   
 }
 
 
-ranks = function(peak_summary_table, prefix = "90th") {
+ranks = function(peak_summary_table, prefix = "75th") {
   tss_rank = peak_summary_table %>%
     mutate(Seurat_cluster = as.character(Seurat_cluster)) %>%
     mutate(id = as.character(row_number())) %>%
@@ -124,34 +115,34 @@ ranks = function(peak_summary_table, prefix = "90th") {
       y = "Distance to TSS (kb)",
       color = "Seurat cluster"
     ) +
-    geom_label_repel(
-      aes(label = ifelse(
-        Cruz_Molina_enh == 1 |
-          Glaser_enh == 1,
-        as.character(Gene_name),
-        ''
-      )),
-      box.padding   = 0.9,
-      max.overlaps = Inf,
-      point.padding = 0.5,
-      size = 2,
-      segment.color = 'black'
-    ) +
+    # geom_label_repel(
+    #   aes(label = ifelse(
+    #     Cruz_Molina_enh == 1 |
+    #       Glaser_enh == 1,
+    #     as.character(Gene_name),
+    #     ''
+    #   )),
+    #   box.padding   = 0.9,
+    #   max.overlaps = Inf,
+    #   point.padding = 0.5,
+    #   size = 2,
+    #   segment.color = 'black'
+    # ) +
     theme_classic() +
     theme(
       axis.text.x = element_blank(),
       axis.ticks.x = element_blank(),
-      text = element_text(size = 20),
+      text = element_text(size = 15),
       plot.title = element_text(size = 15)
     )
   tss_rank
   
   ggsave(
-    glue("{result_folder}{prefix}_G4_TSS_distance_rank-labeled.png"),
+    glue("{result_folder}{prefix}_G4_TSS_distance_rank-labeled.pdf"),
     plot = tss_rank,
     width = 10,
-    height = 5,
-    dpi = 300,
+    height = 3,
+    device = "pdf"
   )
   
 }
@@ -167,8 +158,7 @@ peak_score_distr = function(peak_summary_table,
     labs(
       title = "",
       x = variable,
-      y = "Density",
-      fill = fill
+      y = "Density"
     ) +
     theme_classic() +
     theme(
@@ -179,11 +169,11 @@ peak_score_distr = function(peak_summary_table,
   hist
   
   ggsave(
-    glue("{result_folder}{variable}_distribution.png"),
+    glue("{result_folder}{variable}_distribution.pdf"),
     plot = hist,
-    width = 10,
-    height = 10,
-    dpi = 300,
+    width = 7,
+    height = 7,
+    device = "pdf"
   )
   
 }
@@ -195,8 +185,6 @@ ranks(collect)
 # make histogram
 peak_score_distr(collect)
 
-
-
 peak_rank = collect %>%
   mutate(Seurat_cluster = as.character(Seurat_cluster)) %>%
   mutate(id = as.character(row_number())) %>%
@@ -214,19 +202,19 @@ peak_rank = collect %>%
     y = "MACS2 signalValue",
     color = "Seurat cluster"
   ) +
-  geom_label_repel(
-    aes(label = ifelse(
-      Cruz_Molina_enh == 1 |
-        Glaser_enh == 1,
-      as.character(Gene_name),
-      ''
-    )),
-    box.padding   = 0.9,
-    max.overlaps = Inf,
-    point.padding = 0.5,
-    size = 2,
-    segment.color = 'black'
-  ) +
+  # geom_label_repel(
+  #   aes(label = ifelse(
+  #     Cruz_Molina_enh == 1 |
+  #       Glaser_enh == 1,
+  #     as.character(Gene_name),
+  #     ''
+  #   )),
+  #   box.padding   = 0.9,
+  #   max.overlaps = Inf,
+  #   point.padding = 0.5,
+  #   size = 2,
+  #   segment.color = 'black'
+  # ) +
   theme_classic() +
   theme(
     axis.text.x = element_blank(),
@@ -237,53 +225,12 @@ peak_rank = collect %>%
 peak_rank
 
 ggsave(
-  glue("{enhancer_anal}G4_peak_score_rank-labeled.png"),
+  glue("{enhancer_anal}G4_peak_score_rank-labeled.pdf"),
   plot = peak_rank,
-  width = 10,
-  height = 5,
-  dpi = 300,
+  width = 7,
+  height = 7,
+  device = "pdf"
 )
-
-peak_rank = collect %>%
-  mutate(Seurat_cluster = as.character(Seurat_cluster)) %>%
-  mutate(id = as.character(row_number())) %>%
-  ggplot(data = ., aes(x = reorder(id,-signalValue), y = signalValue)) +
-  geom_point(
-    stat = 'identity',
-    aes(col = Seurat_cluster),
-    size = 3,
-    alpha = 0.4
-  ) +
-  scale_color_brewer(palette = "YlOrRd") +
-  labs(
-    title = expression(paste("MACS2 peak scores")),
-    x = "G4 peaks above 75th percentile",
-    y = "MACS2 signalValue",
-    color = "Seurat cluster"
-  ) +
-  # geom_label_repel(aes(label = ifelse(Cruz_Molina_enh == 1 | Glaser_enh == 1, as.character(Gene_name), '')),
-  #                  box.padding   = 0.9,
-  #                  max.overlaps = Inf,
-  #                  point.padding = 0.5,
-  #                  size = 2,
-  #                  segment.color = 'black') +
-  theme_classic() +
-  theme(
-    axis.text.x = element_blank(),
-    axis.ticks.x = element_blank(),
-    text = element_text(size = 20),
-    plot.title = element_text(size = 15)
-  )
-peak_rank
-
-ggsave(
-  glue("{enhancer_anal}G4_peak_score_rank.png"),
-  plot = peak_rank,
-  width = 10,
-  height = 5,
-  dpi = 300,
-)
-
 
 collect[is.na(collect)] = 0
 
@@ -530,11 +477,11 @@ peak_rank_grid = plot_grid(
 peak_rank_grid
 
 ggsave(
-  glue("{enhancer_anal}G4_peak_score_rank_grid.png"),
+  glue("{result_folder}G4_peak_score_rank_grid.pdf"),
   plot = peak_rank_grid,
   width = 10,
   height = 5,
-  dpi = 300,
+  device = "pdf"
 )
 
 scatter_astro = collect %>% mutate(LTR_vicinity = as.character(LTR_vicinity)) %>%
@@ -679,9 +626,9 @@ scatter_grid = plot_grid(
 scatter_grid
 
 ggsave(
-  glue("{enhancer_anal}G4_H3K27ac_scatter_grid.png"),
+  glue("{result_folder}G4_H3K27ac_scatter_grid.pdf"),
   plot = scatter_grid,
   width = 10,
-  height = 10,
-  dpi = 300,
+  height = 5,
+  device = "pdf"
 )

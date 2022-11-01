@@ -1,13 +1,16 @@
-library("rtracklayer")
-library("glue")
-
-help("liftOver")
+# packages
+suppressPackageStartupMessages({
+  library("rtracklayer")
+  library("glue")
+  library("data.table")
+  library("tidyverse")
+})
 
 # liftover function
-mm9_to_mm10_liftover = function(bw = "../data/bw/ATAC-H33WT.mm9.bw",
+mm9_to_mm10_liftover = function(bw = "../data/bw/GSM5625015_NPC_G4_CnT_Rep2_Batch2.bw",
                                 chrom_sizes = "../data/mm10.chrom.sizes.txt",
                                 chain = "../data/bw/mm9ToMm10.over.chain",
-                                export = "../data/bw/ATAC-H33WT.mm10.bw") {
+                                export = "../data/bw/GSM5625015_NPC_G4_CnT_Rep2_Batch2_mm10.bw") {
   mm10_chrom = fread(chrom_sizes, header = FALSE)
   bigwig = import(bw)
   chain = import.chain(chain)

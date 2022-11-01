@@ -10,7 +10,9 @@ suppressPackageStartupMessages({
 })
 
 # result folder
-result_folder = "../results/Seurat/callpeaks_GFPsorted/"
+result_folder = "../results/Seurat/callpeaks_unsorted/"
+peak_folder = "../results/Seurat/callpeaks_unsorted/peak_sets/"
+peak_list = list.files(glue("{peak_folder}"), pattern = "[0-9]_peaks.narrowPeak$")
 
 # customized upset plot function
 plot_freq_intersect <-
@@ -146,11 +148,11 @@ plot_freq_intersect <-
   }
 
 # generate genomicrange object
-create_gr = function(input = "0_peaks.bed", name) {
+create_gr = function(input = "0_peaks_lanceotron.tsv", name = "0") {
   input = fread(glue("{peak_folder}{input}"))
-  seqnames = input$V1
-  start = input$V2
-  end = input$V3
+  seqnames = unname(unlist(as.vector(input[,1])))
+  start = unname(unlist(as.vector(input[,2])))
+  end = unname(unlist(as.vector(input[,3])))
   rownumber = nrow(input)
   gr = GRanges(seqnames = seqnames,
                ranges = IRanges(
@@ -222,24 +224,32 @@ upset_input = function(peak_set) {
 # Signac MACS2 peaks
 peak_list
 peak0 = create_gr(
-  input = "0_peaks.bed",
+  input = "0_peaks.narrowPeak",
   name = "0"
 )
 peak1 = create_gr(
-  input = "1_peaks.bed",
+  input = "1_peaks.narrowPeak",
   name = "1"
 )
 peak2 = create_gr(
-  input = "2_peaks.bed",
+  input = "2_peaks.narrowPeak",
   name = "2"
 )
 peak3 = create_gr(
-  input = "3_peaks.bed",
+  input = "3_peaks.narrowPeak",
   name = "3"
 )
 peak4 = create_gr(
-  input = "4_peaks.bed",
+  input = "4_peaks.narrowPeak",
   name = "4"
+)
+peak5 = create_gr(
+  input = "5_peaks.narrowPeak",
+  name = "5"
+)
+peak6 = create_gr(
+  input = "6_peaks.narrowPeak",
+  name = "6"
 )
 
 peak0$type = "cluster 0"
@@ -247,10 +257,12 @@ peak1$type = "cluster 1"
 peak2$type = "cluster 2"
 peak3$type = "cluster 3"
 peak4$type = "cluster 4"
+peak5$type = "cluster 5"
+peak6$type = "cluster 6"
 
 # concatenate peak lists
 peak_all <-
-  GenomicRanges::reduce(c(peak0, peak1, peak2, peak3, peak4),)
+  GenomicRanges::reduce(c(peak0, peak1, peak2, peak3, peak4, peak5, peak6))
 
 # visualize overlaps by upset plot
 # input = upset_input(peak0)
@@ -267,16 +279,24 @@ input = upset_input(peak_all)
 upset_plot = plot_freq_intersect(
   input,
   .by = "group",
-  .levels = c("cluster 0", "cluster 1", "cluster 2", "cluster 3", "cluster 4"),
+  .levels = c("cluster 0", "cluster 1", "cluster 2", "cluster 3", "cluster 4", "cluster 5", "cluster 6"),
   .split = "category",
   .color = "#2ca25f",
   top_n = 10
 )
+upset_plot
 
 ggsave(
-  glue("{result_folder}upset_plot_SignacMACS2_peaks.png"),
+  glue("{result_folder}upset_plot_cluster_peaks.png"),
   plot = upset_plot,
   width = 10,
   height = 10,
   dpi = 500,
+)
+ggsave(
+  glue("{result_folder}upset_plot_cluster_peaks.pdf"),
+  plot = upset_plot,
+  width = 10,
+  height = 10,
+  device = "pdf"
 )

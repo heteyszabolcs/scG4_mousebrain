@@ -12,10 +12,10 @@ suppressPackageStartupMessages({
 })
 
 # export folder
-result_folder = "../results/GenomicRanges/"
+result_folder = "../results/GenomicRanges/unsorted_outputs/"
 
 # data
-g4_peaks = "../results/Seurat/callpeaks_GFPsorted/peaks_per_clusters.bed"
+g4_peaks = "../results/Seurat/callpeaks_unsorted/peak_sets/peaks_per_clusters.bed"
 cm_enh = "../data/bed/ESC_Enhancer_CruzMolina.active_mm10.bed"
 gl_enh = "../data/bed/GSE171771_FAIRE_STARR_enh_mESC.bed"
 ltrs = "../data/bed/RepMasker_lt200bp.LTRIS2.bed"
@@ -49,7 +49,7 @@ gl_enh = GRanges(
 
 # G4 length distributions
 hist = g4_peaks %>% mutate(diff = V3 - V2) %>%
-  dplyr::filter(V6 %in% c("0", "1", "2", "3", "4")) %>%
+  dplyr::filter(V6 %in% c("0", "1", "2", "3", "4", "5", "6")) %>%
   ggplot(., aes(x = diff, fill = V6)) +
   geom_histogram(position = "identity", alpha = 0.4) +
   geom_density(alpha = 1.0) +
@@ -67,11 +67,11 @@ hist = g4_peaks %>% mutate(diff = V3 - V2) %>%
 hist
 
 ggsave(
-  glue("{result_folder}G4_length_distr_Seurat_clst.png"),
+  glue("{result_folder}G4_length_distr_Seurat_clst.pdf"),
   plot = hist,
-  width = 10,
-  height = 10,
-  dpi = 300,
+  width = 7,
+  height = 7,
+  device = "pdf"
 )
 
 # convert G4 peak ranges to GRanges
@@ -89,7 +89,7 @@ g4_peaks =
 ## find overlaps between G4 peaks and active enhancers
 # query: g4_peaks
 # subject: enhancers
-g4s_no_ol = g4_peaks[c("0", "1", "2", "3", "4")]
+g4s_no_ol = g4_peaks[c("0", "1", "2", "3", "4", "5", "6")]
 g4_enh_quant = numeric()
 
 for (cluster in names(g4s_no_ol)) {
@@ -129,15 +129,15 @@ bar = tibble(
 bar
 
 ggsave(
-  glue("{result_folder}G4_overlaps_w_CruzM_active_enh.png"),
+  glue("{result_folder}G4_overlaps_w_CruzM_active_enh.pdf"),
   plot = bar,
-  width = 10,
-  height = 10,
-  dpi = 300,
+  width = 7,
+  height = 7,
+  device = "pdf"
 )
 
 ## HOMER annotation of G4 peaks
-result_folder = "../results/Seurat/callpeaks_GFPsorted/"
+result_folder = "../results/Seurat/callpeaks_unsorted/peak_sets/"
 bw_folder = "../data/GSE157637/"
 reference = "mm10"
 
@@ -165,7 +165,7 @@ annotation = function(narrowpeak = "0_peaks.narrowPeak",
     mutate(start = as.character(start), end = as.character(end))
   
   # create HOMER input
-  # keep peak scores with above 90th percentile
+  # keep peak scores with above 75th percentile
   np = np %>% dplyr::filter(signalValue >= quantile(signalValue, percentile))
   write_tsv(np, glue("{result_folder}{cluster}_robust_peaks.bed"))
   
@@ -335,7 +335,7 @@ sign_g4s = GRanges(
     names = rep("G4", nrow(sign_g4s))
   )
 )
-# expand G4 peaks by 1-1 kbp
+# expand G4 peaks
 sign_g4s = extendGR(sign_g4s, upstream = 500, downstream = 500)
 
 # overlap with LTRs

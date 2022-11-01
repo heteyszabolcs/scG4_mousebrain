@@ -10,10 +10,12 @@ suppressPackageStartupMessages({
   library("GenomeInfoDb")
 })
 
+set.seed(5)
+
 # Cellranger-ATAC folder
-cellranger_folder = "../data/CellRanger/GFP_sorted/"
+cellranger_folder = "../data/CellRanger/mES-mEF/"
 # path to result folder
-result_folder = "../results/Seurat/callpeaks_GFPsorted/"
+result_folder = "../results/Seurat/callpeaks_mESC-MEF/"
 
 # read and process data
 counts = Read10X_h5(filename = glue("{cellranger_folder}filtered_peak_bc_matrix.h5"))
@@ -60,9 +62,30 @@ g4 = FindNeighbors(object = g4,
 g4 = FindClusters(object = g4,
                   verbose = FALSE,
                   algorithm = 3)
-dim = DimPlot(object = g4, label = TRUE) + NoLegend()
+dim = DimPlot(object = g4, label = TRUE, pt.size = 6) + 
+  NoLegend() +
+  scale_color_brewer(palette = "Set3") +
+  xlim(-10, 10) + 
+  ylim(-10, 10) + 
+  ggtitle("mESC-MEF G4 scCutnTag")
+
+# tuning
+# for(i in seq(5, 50, by = 5)) {
+#   tune = RunUMAP(object = g4,
+#                reduction = 'lsi',
+#                n.neighbors = i,
+#                dims = 2:30)
+#   print(DimPlot(object = tune, label = TRUE, pt.size = 6) + 
+#     NoLegend() +
+#     scale_color_brewer(palette = "Set3") +
+#     xlim(-10, 10) + 
+#     ylim(-10, 10) + 
+#     ggtitle(as.character(i)))
+#   
+# }
+  
 ggsave(
-  glue("{result_folder}Seurat_GFP_sorted_UMAP.png"),
+  glue("{result_folder}Seurat_mESC-MEF_UMAP.png"),
   plot = dim,
   width = 10,
   height = 10,
@@ -92,7 +115,7 @@ for(cluster in unique(barcodes$seurat_clusters)) {
 }
 
 # export Rds
-saveRDS(g4, glue("{result_folder}GFP_sorted.Rds"))
+saveRDS(g4, glue("{result_folder}mESC-MEF.Rds"))
 
 # peak calling per Seurat clusters
 peaks = CallPeaks(
