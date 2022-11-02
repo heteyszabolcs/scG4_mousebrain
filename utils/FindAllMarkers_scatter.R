@@ -13,6 +13,7 @@ options(warn = -1)
 # folders
 result_folder = "../results/Seurat/callpeaks_unsorted/"
 
+# function for scatterplot
 create_scatter =
   function(findallmarker_output, title) {
     prom = fread(findallmarker_output)
@@ -64,6 +65,8 @@ create_scatter =
     
   }
 
+# loop over the promoter G4s that were marker regions in the Seurat clusters
+# creating G4 log2FC vs. scRNA-Seq log2FC scatterplots
 proms = list.files("../results/Seurat/callpeaks_unsorted/", pattern = "_promoters.tsv")
 titles = c(
   "Promoter G4s - cluster 0",
@@ -97,7 +100,7 @@ for (i in 1:length(proms)) {
   
 }
 
-
+# grid 
 plots = list()
 for (i in 1:length(proms)) {
   plot = create_scatter(
