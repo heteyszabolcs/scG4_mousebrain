@@ -8,14 +8,15 @@ suppressPackageStartupMessages({
   library("EnsDb.Mmusculus.v79")
   library("GenomicFeatures")
   library("GenomeInfoDb")
+  library("Matrix")
 })
 
 set.seed(5)
 
 # Cellranger-ATAC folder
-cellranger_folder = "../data/CellRanger/mES-mEF/"
+cellranger_folder = "../data/CellRanger/GFP_sorted/"
 # path to result folder
-result_folder = "../results/Seurat/callpeaks_mESC-MEF/"
+result_folder = "../results/Seurat/callpeaks_GFPsorted/"
 
 # read and process data
 counts = Read10X_h5(filename = glue("{cellranger_folder}filtered_peak_bc_matrix.h5"))
@@ -67,7 +68,7 @@ dim = DimPlot(object = g4, label = TRUE, pt.size = 6) +
   scale_color_brewer(palette = "Set3") +
   xlim(-10, 10) + 
   ylim(-10, 10) + 
-  ggtitle("mESC-MEF G4 scCutnTag")
+  ggtitle("GFP-sorted scCutnTag")
 
 # tuning
 # for(i in seq(5, 50, by = 5)) {
@@ -85,7 +86,7 @@ dim = DimPlot(object = g4, label = TRUE, pt.size = 6) +
 # }
   
 ggsave(
-  glue("{result_folder}Seurat_mESC-MEF_UMAP.png"),
+  glue("{result_folder}Seurat_GFPsorted_UMAP.png"),
   plot = dim,
   width = 10,
   height = 10,
@@ -115,7 +116,7 @@ for(cluster in unique(barcodes$seurat_clusters)) {
 }
 
 # export Rds
-saveRDS(g4, glue("{result_folder}mESC-MEF.Rds"))
+saveRDS(g4, glue("{result_folder}GFPsorted.Rds"))
 
 # peak calling per Seurat clusters
 peaks = CallPeaks(

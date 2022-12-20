@@ -442,7 +442,6 @@ full_volc_scrna = EnhancedVolcano(
   legendPosition = "right",
   drawConnectors = TRUE,
   max.overlaps = 100,
-  
   colCustom = keyvalues,
   x = 'scRNA_Seq_fc',
   y = 'scRNA_Seq_padj',

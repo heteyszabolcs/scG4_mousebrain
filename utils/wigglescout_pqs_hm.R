@@ -20,7 +20,7 @@ write_tsv(g4_seq, glue("{result_folder}GSM3003547_G4seq_mm10_all_w15_th-1_minus.
 g4_seq = glue("{result_folder}GSM3003547_G4seq_mm10_all_w15_th-1_minus.hits.max.K.w50.25_top100.bed")
 
 # PQS mm10 bigwig
-pqs = "../data/bw/canonical_PQS_mm10_stack.bw"
+pqs = "../data/bw/mm10_canPQS-regex_binary.bw"
 
 # scG4 peak set
 peaks = fread(glue("{peak_folder}cluster_1_res0.1_Lanc_peaks.tsv"))

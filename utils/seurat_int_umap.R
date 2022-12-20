@@ -15,15 +15,24 @@ suppressPackageStartupMessages({
   library("ggrastr")
   library("RColorBrewer")
   library("scclusteval")
+  library("ggpubr")
+  library("matrixStats")
 })
 
 set.seed(5)
 
-# path to result folder
-result_folder = "../results/Seurat/callpeaks_unsorted/"
+# G4 - scRNA data integration
+# main source: 
+# https://github.com/Castelo-Branco-lab/scCut-Tag_2020/blob/master/notebooks/integration/integration_H3K4me3_marques.Rmd
 
-# Seurat object (brain unsorted)
+
+# path to result folder
+result_folder = "../results/Seurat/callpeaks_GFPsorted/"
+
+# Seurat object (brain unsorted / brain GFP sorted)
 unsorted = readRDS(file = "../results/Seurat/callpeaks_unsorted/unsorted.Rds")
+unsorted_res0.1 = readRDS(file = "../results/Seurat/callpeaks_unsorted/unsorted_res0.1.Rds")
+sorted = readRDS(file = "../results/Seurat/callpeaks_GFPsorted/GFPsorted.Rds")
 
 # Marques et al. oligo scRNA data
 rna = read.table(
@@ -68,7 +77,7 @@ new_ids[new_ids == 'MOL5'] = 'MOL'
 new_ids[new_ids == 'MOL6'] = 'MOL'
 rna@meta.data$merged_cell_class = new_ids
 
-p1 = DimPlot(unsorted,
+p1 = DimPlot(sorted,
              pt.size = 2,
              label.size = 7,
              repel = TRUE,
@@ -104,22 +113,23 @@ p2 = DimPlot(
 
 # find all markers in scRNA-Seq data
 rna@active.ident = rna$cell_class
-markers = FindAllMarkers(rna)
+#markers = FindAllMarkers(rna)
+markers = read_tsv("../results/Seurat/scRNA-Seq_Marques_et_al-FindAllMarkers_output.tsv")
 markers.pos = markers[markers$p_val < 0.05 &
-                        markers$avg_logFC > 0.5,]
+                        markers$avg_log2FC > 0.5,]
 
-write_tsv(markers,
-          "../results/Seurat/scRNA-Seq_Marques_et_al-FindAllMarkers_output.tsv")
+# write_tsv(markers,
+#           "../results/Seurat/scRNA-Seq_Marques_et_al-FindAllMarkers_output.tsv")
 
-DefaultAssay(unsorted) = "GA"
+DefaultAssay(sorted) = "GA"
 DefaultAssay(rna) = "RNA"
 
-common.genes = intersect(rownames(rna), rownames(unsorted))
+common.genes = intersect(rownames(rna), rownames(sorted))
 
 # anchor identification between G4 scCnT and scRNA-Seq data sets
 transfer.anchors = FindTransferAnchors(
   reference = rna,
-  query = unsorted,
+  query = sorted,
   reduction = 'cca',
   query.assay = 'GA',
   reference.assay = 'RNA',
@@ -134,18 +144,19 @@ refdata = GetAssayData(rna, assay = "RNA", slot = "data")[genes.use, ]
 imputation = TransferData(
   anchorset = transfer.anchors,
   refdata = refdata,
-  weight.reduction = unsorted[["lsi"]],
+  weight.reduction = sorted[["lsi"]],
   dims = 1:50
 )
 
-unsorted[['RNA']] = imputation
-saveRDS(unsorted, glue("{result_folder}unsorted_int_Marques.Rds"))
-unsorted = readRDS(glue("{result_folder}unsorted_int_Marques.Rds"))
+
+sorted[['RNA']] = imputation
+saveRDS(sorted, glue("{result_folder}sorted_int_Marques.Rds"))
+sorted = readRDS(glue("{result_folder}sorted_int_Marques.Rds"))
 
 rna@meta.data$data_type = "scRNA-Seq (Marques et al.)"
-unsorted@meta.data$data_type = "unsorted G4 scCut&Tag"
+sorted@meta.data$data_type = "sorted G4 scCut&Tag"
 
-coembed = merge(x = rna, y = unsorted)
+coembed = merge(x = rna, y = sorted)
 
 coembed = ScaleData(coembed, features = genes.use, do.scale = FALSE)
 coembed = RunPCA(coembed, features = genes.use, verbose = FALSE)
@@ -164,10 +175,246 @@ new_ids[new_ids == 'MOL5'] = 'MOL'
 new_ids[new_ids == 'MOL6'] = 'MOL'
 coembed@meta.data$cell_class = new_ids
 
-# Ridge p
-# RidgePlot(object = dataB, features.plot = rownames(cluster1.markers)[1:6])
-cols = brewer.pal(n = 6, name = "Greens")
-RidgePlot(object = coembed, features = "Th" , assay = "GA", group.by = "cell_class", cols = cols)
+# Feature plots
+create_expr_feature_plot = function(marker_gene) {
+  # keep G4 scCut&Tag part of coembedding
+  coembed.scrna = coembed[,coembed$data_type == "scRNA-Seq (Marques et al.)"]
+  
+  # feature plot
+  plot = FeaturePlot(
+    object = coembed.scrna,
+    features = marker_gene,
+    min.cutoff = min(coembed.scrna@assays$RNA@data[marker_gene,]),
+    max.cutoff = max(coembed.scrna@assays$RNA@data[marker_gene,]),
+    raster = TRUE
+  ) +
+    xlim(-15, 15) +
+    ylim(-10, 10) +
+    scale_color_gradient2(low = "#0d0a1e", mid = "#c44a46", high = "#eef07a",
+                          midpoint = mean(c(min(coembed.scrna@assays$RNA@data[marker_gene,]),
+                                            max(coembed.scrna@assays$RNA@data[marker_gene,])))) +
+    theme(
+      legend.position = 'bottom',
+      text = element_text(size = 15),
+      plot.title = element_text(size = 20),
+      axis.text.x = element_text(size = 25, color = "black"),
+      axis.text.y = element_text(size = 25, color = "black")
+    ) +
+    NoAxes()
+  return(print(plot))
+}
+
+create_g4_feature_plot = function(marker_gene) {
+  # keep G4 scCut&Tag part of coembedding
+  coembed.g4 = coembed[,coembed$data_type == "sorted G4 scCut&Tag"]
+  
+  # feature plot
+  plot = FeaturePlot(
+    object = coembed.g4,
+    features = marker_gene,
+    min.cutoff = min(coembed.g4@assays$GA@data[marker_gene,]),
+    max.cutoff = max(coembed.g4@assays$GA@data[marker_gene,]),
+    raster = TRUE
+  ) +
+    xlim(-15, 15) +
+    ylim(-10, 10) +
+    scale_color_viridis_c() +
+    theme(
+      legend.position = 'bottom',
+      text = element_text(size = 15),
+      plot.title = element_text(size = 20),
+      axis.text.x = element_text(size = 25, color = "black"),
+      axis.text.y = element_text(size = 25, color = "black")
+    ) +
+    NoAxes()
+  return(print(plot))
+}
+
+# pull gene symbol with the highest avg_log2FC score per cluster 
+get_best_marker = function(cell_type) {
+  coembed.g4 = coembed[,coembed$data_type == "sorted G4 scCut&Tag"]
+  marker = markers %>% dplyr::filter(str_detect(cluster, cell_type)) %>%
+    arrange(avg_log2FC) %>% top_n(n = 1, wt = avg_log2FC) %>% pull(gene)
+  
+  if (marker %in% rownames(coembed.g4@assays$GA@data)) {
+    return(marker)
+  } else {
+    marker = markers %>% dplyr::filter(str_detect(cluster, cell_type)) %>%
+      arrange(avg_log2FC) %>% top_n(n = 10, wt = avg_log2FC) %>% pull(gene)
+    for (i in marker) {
+      if (i %in% rownames(coembed.g4@assays$GA@data)) {
+        return(i)
+      }
+    }
+  }
+}
+
+get_underexpr_marker = function(cell_type) {
+  coembed.g4 = coembed[,coembed$data_type == "sorted G4 scCut&Tag"]
+  marker = markers %>% dplyr::filter(str_detect(cluster, cell_type)) %>%
+    arrange(avg_log2FC) %>% top_n(n = -1, wt = avg_log2FC) %>% pull(gene)
+  
+  if (marker %in% rownames(coembed.g4@assays$GA@data)) {
+    return(marker)
+  } else {
+    marker = markers %>% dplyr::filter(str_detect(cluster, cell_type)) %>%
+      arrange(avg_log2FC) %>% top_n(n = 10, wt = avg_log2FC) %>% pull(gene)
+    for (i in marker) {
+      if (i %in% rownames(coembed.g4@assays$GA@data)) {
+        return(i)
+      }
+    }
+  }
+}
+
+cell_types = unique(coembed@meta.data$cell_class)
+cell_types = cell_types[!is.na(cell_types)]
+
+underexpr_marques_markers = sapply(cell_types, get_underexpr_marker)
+best_marques_markers = sapply(cell_types, get_best_marker)
+g4_feature_plots = lapply(best_marques_markers, create_g4_feature_plot)
+g4_feature_plots = ggarrange(plotlist = g4_feature_plots)
+expr_feature_plots = lapply(best_marques_markers, create_expr_feature_plot)
+expr_feature_plots = ggarrange(plotlist = expr_feature_plots)
+
+ggsave(
+  glue("{result_folder}G4_Feature_plots_Marques_markers.pdf"),
+  plot = g4_feature_plots,
+  width = 10,
+  height = 7,
+  device = "pdf"
+)
+
+ggsave(
+  glue("{result_folder}expr_Feature_plots_Marques_markers.pdf"),
+  plot = expr_feature_plots,
+  width = 10,
+  height = 7,
+  device = "pdf"
+)
+
+g4_feature_plots = lapply(underexpr_marques_markers, create_g4_feature_plot)
+g4_feature_plots = ggarrange(plotlist = g4_feature_plots)
+expr_feature_plots = lapply(underexpr_marques_markers, create_expr_feature_plot)
+expr_feature_plots = ggarrange(plotlist = expr_feature_plots)
+
+ggsave(
+  glue("{result_folder}G4_Feature_plots_Marques_neg_markers.pdf"),
+  plot = g4_feature_plots,
+  width = 10,
+  height = 7,
+  device = "pdf"
+)
+
+ggsave(
+  glue("{result_folder}expr_Feature_plots_Marques_neg_markers.pdf"),
+  plot = expr_feature_plots,
+  width = 10,
+  height = 7,
+  device = "pdf"
+)
+
+# Violin plots
+violins = lapply(best_marques_markers, function(x)
+  VlnPlot(
+    object = rna,
+    features = x,
+    raster = TRUE,
+    log = FALSE,
+    split.by = "merged_cell_class",
+    group.by = "merged_cell_class"
+  ) +
+    ylim(0, 5) +
+    scale_fill_manual(values = rep("#a6bddb", 6)) +
+    xlab(" ") +
+    guides(legend = "none", fill = "none"))
+
+expr_violins = ggarrange(plotlist = violins)
+expr_violins
+
+g4_violins = lapply(best_marques_markers, function(x)
+  VlnPlot(
+    object = unsorted_res0.1[, unsorted_res0.1$seurat_clusters != "2"],
+    features = x,
+    raster = TRUE,
+    log = FALSE,
+    split.by = "seurat_clusters",
+    group.by = "seurat_clusters"
+  ) +
+    scale_fill_manual(values = c("#addd8e", "#bdbdbd")) +
+    xlab(" ") +
+    ylim(0, 0.00005) +
+    guides(legend = "none", fill = "none") +
+  stat_compare_means(label.y = 4e-05, label.x = 1.2, size = 3) +
+  stat_compare_means(
+    label = "p.signif",
+    method = "t.test",
+    ref.group = ".all.",
+    label.y = 50
+  ))
+
+
+g4_violins = ggarrange(plotlist = g4_violins)
+g4_violins
+
+ggsave(
+  glue("{result_folder}G4_Violin_plots_Marques_markers.pdf"),
+  plot = g4_violins,
+  width = 10,
+  height = 7,
+  device = "pdf"
+)
+
+ggsave(
+  glue("{result_folder}expr_Violin_plots_Marques_markers.pdf"),
+  plot = expr_violins,
+  width = 8,
+  height = 6,
+  device = "pdf"
+)
+
+# heatmap of expression markers
+hm = DoHeatmap(rna, features = best_marques_markers,
+          group.by = "merged_cell_class", raster = FALSE) +
+  scale_fill_gradientn(colors = c("#0d0a1e", "#c44a46", "#eef07a")) +
+  theme(
+    axis.text.y = element_text(size = 18, color = "black")
+  ) + NoLegend()
+
+ggsave(
+  glue("{result_folder}expr_heatmap_Marques_markers.pdf"),
+  plot = hm,
+  width = 10,
+  height = 7
+)
+
+sorted_cluster2 = subset(sorted, subset = seurat_clusters == 2)
+sorted_cluster2 = as.matrix(sorted_cluster2@assays$GA@counts)
+most_var_cluster2 = rownames(sorted_cluster2)[order(rowMeans(sorted_cluster2), decreasing = TRUE)][1:200]
+most_var_cluster2 = markers %>% dplyr::filter(gene %in% most_var_cluster2) %>% 
+  dplyr::filter(avg_log2FC > 0) %>% mutate(cluster_aggr = ifelse(str_detect(cluster, "NFOL"), "NFOL", cluster)) %>% 
+  mutate(cluster_aggr = ifelse(str_detect(cluster, "MFOL"), "MFOL", cluster_aggr)) %>% 
+  mutate(cluster_aggr = ifelse(str_detect(cluster, "MOL"), "MOL", cluster_aggr)) %>% 
+  group_by(cluster_aggr) %>% summarise(cluster_n = n())
+
+bars = ggplot(data = most_var_cluster2, aes(y = cluster_n, x = reorder(cluster_aggr, -cluster_n))) +
+  geom_bar(stat = "identity", fill = "steelblue", color = "black") +
+  theme_minimal() +
+  labs(title = "GFP+ Seurat cluster 2",
+       x = " ",
+       y = "# of positive expr. marker") +
+  theme(
+    text = element_text(size = 20),
+    plot.title = element_text(size = 15),
+    axis.text.x = element_text(size = 15, color = "black"))
+bars
+
+ggsave(
+  glue("{result_folder}Seurat_cl2-quant_of_pos_markers.pdf"),
+  plot = bars,
+  width = 7,
+  height = 5
+)
 
 ## UMAP dimension plots
 DimPlot(rna)
@@ -227,7 +474,7 @@ coembed_gfp = DimPlot(
   label.size = 7,
   group.by = 'GFP',
   repel = TRUE,
-  na.value = "grey0",
+  na.value = "white",
   raster = TRUE
 ) +
   xlim(-15, 15) +
@@ -282,15 +529,16 @@ coembed_experiments = DimPlot(
 
 coembed@meta.data$seurat_clusters[is.na(coembed@meta.data$seurat_clusters)] = "scRNA-Seq"
 
+
 cols = c(
   "scRNA-Seq" = "#bdbdbd",
   "0" = "#de2d26",
   "1" = "#bdbdbd",
   "2" = "#bdbdbd",
   "3" = "#bdbdbd",
-  "4" = "#bdbdbd",
-  "5" = "#bdbdbd",
-  "6" = "#bdbdbd"
+  "4" = "#bdbdbd"
+  # "5" = "#bdbdbd",
+  # "6" = "#bdbdbd"
 )
 
 coembed_cluster0 = DimPlot(
@@ -330,9 +578,9 @@ cols = c(
   "1" = "#de2d26",
   "2" = "#bdbdbd",
   "3" = "#bdbdbd",
-  "4" = "#bdbdbd",
-  "5" = "#bdbdbd",
-  "6" = "#bdbdbd"
+  "4" = "#bdbdbd"
+  # "5" = "#bdbdbd",
+  # "6" = "#bdbdbd"
 )
 
 coembed_cluster1 = DimPlot(
@@ -372,9 +620,9 @@ cols = c(
   "1" = "#bdbdbd",
   "2" = "#de2d26",
   "3" = "#bdbdbd",
-  "4" = "#bdbdbd",
-  "5" = "#bdbdbd",
-  "6" = "#bdbdbd"
+  "4" = "#bdbdbd"
+  # "5" = "#bdbdbd",
+  # "6" = "#bdbdbd"
 )
 
 coembed_cluster2 = DimPlot(
@@ -414,10 +662,10 @@ cols = c(
   "1" = "#bdbdbd",
   "2" = "#bdbdbd",
   "3" = "#de2d26",
-  "4" = "#bdbdbd",
-  "5" = "#bdbdbd",
-  "6" = "#bdbdbd"
-)
+  "4" = "#bdbdbd")
+  # "5" = "#bdbdbd",
+  # "6" = "#bdbdbd"
+
 
 coembed_cluster3 = DimPlot(
   coembed,
@@ -456,10 +704,9 @@ cols = c(
   "1" = "#bdbdbd",
   "2" = "#bdbdbd",
   "3" = "#bdbdbd",
-  "4" = "#de2d26",
-  "5" = "#bdbdbd",
-  "6" = "#bdbdbd"
-)
+  "4" = "#de2d26")
+  # "5" = "#bdbdbd",
+  # "6" = "#bdbdbd"
 
 coembed_cluster4 = DimPlot(
   coembed,
@@ -498,41 +745,41 @@ cols = c(
   "1" = "#bdbdbd",
   "2" = "#bdbdbd",
   "3" = "#bdbdbd",
-  "4" = "#bdbdbd",
-  "5" = "#de2d26",
-  "6" = "#bdbdbd"
-)
+  "4" = "#bdbdbd")
+  # "5" = "#de2d26",
+  # "6" = "#bdbdbd"
 
-coembed_cluster5 = DimPlot(
-  coembed,
-  pt.size = 1,
-  label.size = 7,
-  group.by = 'seurat_clusters',
-  repel = TRUE,
-  order = "5",
-  raster = TRUE
-) +
-  xlim(-15, 15) +
-  ylim(-15, 15) +
-  scale_colour_manual(values = cols,
-                      breaks = "5",
-                      labels = "cluster 5") +
-  ggtitle(" ") +
-  theme(
-    text = element_text(size = 25),
-    plot.title = element_text(size = 20),
-    axis.text.x = element_text(size = 25, color = "black"),
-    axis.text.y = element_text(size = 25, color = "black")
-  ) +
-  NoAxes()
 
-ggsave(
-  glue("{result_folder}Seurat_Marques_integration_cl5.pdf"),
-  plot = coembed_cluster5,
-  width = 10,
-  height = 10,
-  device = "pdf"
-)
+# coembed_cluster5 = DimPlot(
+#   coembed,
+#   pt.size = 1,
+#   label.size = 7,
+#   group.by = 'seurat_clusters',
+#   repel = TRUE,
+#   order = "5",
+#   raster = TRUE
+# ) +
+#   xlim(-15, 15) +
+#   ylim(-15, 15) +
+#   scale_colour_manual(values = cols,
+#                       breaks = "5",
+#                       labels = "cluster 5") +
+#   ggtitle(" ") +
+#   theme(
+#     text = element_text(size = 25),
+#     plot.title = element_text(size = 20),
+#     axis.text.x = element_text(size = 25, color = "black"),
+#     axis.text.y = element_text(size = 25, color = "black")
+#   ) +
+#   NoAxes()
+# 
+# ggsave(
+#   glue("{result_folder}Seurat_Marques_integration_cl5.pdf"),
+#   plot = coembed_cluster5,
+#   width = 10,
+#   height = 10,
+#   device = "pdf"
+# )
 
 cols = c(
   "scRNA-Seq" = "#bdbdbd",
@@ -540,41 +787,41 @@ cols = c(
   "1" = "#bdbdbd",
   "2" = "#bdbdbd",
   "3" = "#bdbdbd",
-  "4" = "#bdbdbd",
-  "5" = "#bdbdbd",
-  "6" = "#de2d26"
-)
+  "4" = "#bdbdbd"
+#   "5" = "#bdbdbd",
+#   "6" = "#de2d26"
+ )
 
-coembed_cluster6 = DimPlot(
-  coembed,
-  pt.size = 1,
-  label.size = 7,
-  group.by = 'seurat_clusters',
-  repel = TRUE,
-  order = "6",
-  raster = TRUE
-) +
-  xlim(-15, 15) +
-  ylim(-15, 15) +
-  scale_colour_manual(values = cols,
-                      breaks = "6",
-                      labels = "cluster 6") +
-  ggtitle(" ") +
-  theme(
-    text = element_text(size = 25),
-    plot.title = element_text(size = 20),
-    axis.text.x = element_text(size = 25, color = "black"),
-    axis.text.y = element_text(size = 25, color = "black")
-  ) +
-  NoAxes()
+# coembed_cluster6 = DimPlot(
+#   coembed,
+#   pt.size = 1,
+#   label.size = 7,
+#   group.by = 'seurat_clusters',
+#   repel = TRUE,
+#   order = "6",
+#   raster = TRUE
+# ) +
+#   xlim(-15, 15) +
+#   ylim(-15, 15) +
+#   scale_colour_manual(values = cols,
+#                       breaks = "6",
+#                       labels = "cluster 6") +
+#   ggtitle(" ") +
+#   theme(
+#     text = element_text(size = 25),
+#     plot.title = element_text(size = 20),
+#     axis.text.x = element_text(size = 25, color = "black"),
+#     axis.text.y = element_text(size = 25, color = "black")
+#   ) +
+#   NoAxes()
 
-ggsave(
-  glue("{result_folder}Seurat_Marques_integration_cl6.pdf"),
-  plot = coembed_cluster6,
-  width = 10,
-  height = 10,
-  device = "pdf"
-)
+# ggsave(
+#   glue("{result_folder}Seurat_Marques_integration_cl6.pdf"),
+#   plot = coembed_cluster6,
+#   width = 10,
+#   height = 10,
+#   device = "pdf"
+# )
 
 clusters = plot_grid(
   coembed_cluster0,
@@ -582,8 +829,7 @@ clusters = plot_grid(
   coembed_cluster2,
   coembed_cluster3,
   coembed_cluster4,
-  coembed_cluster5,
-  coembed_cluster6,
+  #coembed_cluster6,
   ncol = 2,
   nrow = 4
 )
@@ -634,7 +880,7 @@ umaps = plot_grid(p1,
                   nrow = 2)
 
 ggsave(
-  glue("{result_folder}Seurat_unsorted_Marques_UMAPs.png"),
+  glue("{result_folder}Seurat_sorted_Marques_UMAPs.png"),
   plot = umaps,
   width = 12,
   height = 12,
@@ -642,7 +888,7 @@ ggsave(
 )
 
 ggsave(
-  glue("{result_folder}Seurat_unsorted_Marques_UMAPs.pdf"),
+  glue("{result_folder}Seurat_sorted_Marques_UMAPs.pdf"),
   plot = umaps,
   width = 12,
   height = 12,
