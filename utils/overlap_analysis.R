@@ -16,9 +16,9 @@ suppressPackageStartupMessages({
 })
 
 # result / peak folder
-peak_folder = "../results/Seurat/callpeaks_mESC-MEF/peak_sets/"
+peak_folder = "../results/Seurat/callpeaks_unsorted/peak_sets/"
 bed_folder = "../data/bed/"
-result_folder = "../results/GenomicRanges/mESC-MEF_outputs/"
+result_folder = "../results/GenomicRanges/unsorted_outputs/"
 
 create_venn = function(peak1,
                        peak2,
@@ -328,6 +328,67 @@ venn_cnt2venn <- function(venn_cnt) {
 
 pdf(
   file = glue("{result_folder}bulk_NPC_MEF-MESCcluster0_1.pdf"),
+  # The directory you want to save the file in
+  width = 8,
+  height = 8
+)
+v <- venn_cnt2venn(res$vennCounts)
+print(plot(v, doWeights = FALSE))
+dev.off()
+
+# Venn with 3 sets - bulk neuron and cluster0/1 of unsorted scCnT
+cluster0_unsorted = fread("../results/Seurat/callpeaks_unsorted/peak_sets/0_peaks_res0.1.narrowPeak")
+cluster0_unsorted$type = "cluster0"
+cluster0_unsorted = GRanges(
+  seqnames = cluster0_unsorted$V1,
+  ranges = IRanges(
+    start = cluster0_unsorted$V2,
+    end = cluster0_unsorted$V3,
+    names = cluster0_unsorted$type,
+  )
+)
+
+cluster1_unsorted = fread("../results/Seurat/callpeaks_unsorted/peak_sets/1_peaks_res0.1.narrowPeak")
+cluster1_unsorted$type = "cluster1"
+cluster1_unsorted = GRanges(
+  seqnames = cluster1_unsorted$V1,
+  ranges = IRanges(
+    start = cluster1_unsorted$V2,
+    end = cluster1_unsorted$V3,
+    names = cluster1_unsorted$type,
+  )
+)
+
+bulk_peak = fread("../data/bed/bulk_CnT_G4_neuron_mm10.bed")
+bulk_peak$type = "neuron_bulk_CnT"
+bulk_peak = GRanges(
+  seqnames = bulk_peak$V1,
+  ranges = IRanges(
+    start = bulk_peak$V2,
+    end = bulk_peak$V3,
+    names = bulk_peak$type,
+  )
+)
+
+cluster0_unsorted$type = "cluster_0"
+cluster1_unsorted$type = "cluster_1"
+bulk_peak$type = "neuron_bulk_CnT"
+gr = c(cluster0_unsorted, cluster1_unsorted, bulk_peak)
+grl = splitAsList(gr, gr$type)
+grl = unique(grl)
+
+res = makeVennDiagram(Peaks = grl, NameOfPeaks = names(grl))
+
+venn_cnt2venn <- function(venn_cnt) {
+  n <- which(colnames(venn_cnt) == "Counts") - 1
+  SetNames = colnames(venn_cnt)[1:n]
+  Weight = venn_cnt[, "Counts"]
+  names(Weight) <- apply(venn_cnt[, 1:n], 1, paste, collapse = "")
+  Venn(SetNames = SetNames, Weight = Weight)
+}
+
+pdf(
+  file = glue("{result_folder}bulk_neuron_unsorted_cluster0_1.pdf"),
   # The directory you want to save the file in
   width = 8,
   height = 8

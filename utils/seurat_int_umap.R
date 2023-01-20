@@ -17,6 +17,8 @@ suppressPackageStartupMessages({
   library("scclusteval")
   library("ggpubr")
   library("matrixStats")
+  library("ComplexHeatmap")
+  library("circlize")
 })
 
 set.seed(5)
@@ -24,7 +26,6 @@ set.seed(5)
 # G4 - scRNA data integration
 # main source: 
 # https://github.com/Castelo-Branco-lab/scCut-Tag_2020/blob/master/notebooks/integration/integration_H3K4me3_marques.Rmd
-
 
 # path to result folder
 result_folder = "../results/Seurat/callpeaks_GFPsorted/"
@@ -140,14 +141,101 @@ transfer.anchors = FindTransferAnchors(
 genes.use = VariableFeatures(rna)
 refdata = GetAssayData(rna, assay = "RNA", slot = "data")[genes.use, ]
 
+## Transfer data (Seurat)
 # imputation - data transfer
 imputation = TransferData(
   anchorset = transfer.anchors,
   refdata = refdata,
   weight.reduction = sorted[["lsi"]],
-  dims = 1:50
+  dims = 1:50,
+  prediction.assay = TRUE
 )
 
+# predict cell labels
+cell_class_pred = TransferData(
+  anchorset = transfer.anchors,
+  refdata = rna@meta.data$merged_cell_class,
+  weight.reduction = sorted[["lsi"]],
+  dims = 1:50,
+  prediction.assay = TRUE
+)
+
+
+
+saveRDS(cell_class_pred, glue("{result_folder}sorted_cell_label_preds.Rds"))
+
+predictions = as.matrix(cell_class_pred@data)
+predictions = predictions[rownames(predictions) != "max",]
+col_fun = colorRamp2(c(0, 0.5, 1), c("#421654", "#458f8a", "#f0e527"))
+pdf(
+  file = glue("{result_folder}predicton_score_heatmap.pdf"),
+  width = 8,
+  height = 6
+)
+Heatmap(
+  predictions,
+  column_title = " ",
+  row_title = " ",
+  name = "pred. score",
+  # row_km = 2,
+  # column_km = 2,
+  clustering_method_rows = "complete",
+  col = col_fun,
+  #rect_gp = gpar(col = "black", lwd = 0.1),
+  show_column_dend = TRUE,
+  cluster_columns = TRUE,
+  cluster_rows = TRUE,
+  show_row_dend = FALSE,
+  show_column_names = FALSE,
+  heatmap_width = unit(17, "cm"),
+  heatmap_height = unit(6, "cm"),
+  row_names_gp = gpar(fontsize = 12),
+  column_names_rot = 90
+)
+dev.off()
+
+types = rownames(predictions)
+predictions = as.data.frame(predictions)
+predictions$types = types
+predictions_long = predictions %>% pivot_longer(., cols = c("AAACGAAAGAAGCCGT-1":"TTTGTGTTCTCGCGTT-1"),
+                                                names_to = "cell_id", values_to = "pred_score")
+meta = as_tibble(sorted@meta.data)
+meta = meta %>% mutate(cell_id = rownames(sorted@meta.data))
+meta = predictions_long %>% inner_join(., meta, by = "cell_id")
+
+pred_boxplots = lapply(types, function(x) {
+  meta = meta %>% dplyr::filter(types == x)
+  plot = ggplot(meta,
+                aes(x = seurat_clusters, y = pred_score, fill = seurat_clusters)) +
+    geom_boxplot(color = "black") +
+    scale_fill_brewer(palette = "Set3") +
+    ylim(0, 1) +
+    labs(
+      title = x,
+      x = "",
+      y = "",
+      fill = ""
+    ) +
+    theme_classic() +
+    guides(fill = "none") +
+    theme(
+      text = element_text(size = 9),
+      plot.title = element_text(size = 15, face = "bold"),
+      axis.text.x = element_text(size = 12, color = "black"),
+      axis.text.y = element_text(size = 12, color = "black")
+    )
+  return(print(plot))
+})
+
+pred_boxplots = ggarrange(plotlist = pred_boxplots)
+
+ggsave(
+  glue("{result_folder}predicton_score_boxplots.pdf"),
+  plot = pred_boxplots,
+  width = 10,
+  height = 7,
+  device = "pdf"
+)
 
 sorted[['RNA']] = imputation
 saveRDS(sorted, glue("{result_folder}sorted_int_Marques.Rds"))
@@ -155,6 +243,30 @@ sorted = readRDS(glue("{result_folder}sorted_int_Marques.Rds"))
 
 rna@meta.data$data_type = "scRNA-Seq (Marques et al.)"
 sorted@meta.data$data_type = "sorted G4 scCut&Tag"
+
+# FeaturePlot(
+#   sorted,
+#   features = "nCount_peaks",
+#   min.cutoff = 0,
+#   max.cutoff = 3000,
+#   raster = TRUE
+# ) +
+#   xlim(-15, 15) +
+#   ylim(-10, 10) +
+#   scale_color_gradient2(
+#     low = "#0d0a1e",
+#     mid = "#c44a46",
+#     high = "#eef07a",
+#     midpoint = 1500
+#   ) +
+#   theme(
+#     legend.position = 'bottom',
+#     text = element_text(size = 15),
+#     plot.title = element_text(size = 20),
+#     axis.text.x = element_text(size = 25, color = "black"),
+#     axis.text.y = element_text(size = 25, color = "black")
+#   ) +
+#   NoAxes()
 
 coembed = merge(x = rna, y = sorted)
 

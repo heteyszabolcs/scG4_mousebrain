@@ -85,13 +85,28 @@ g4_res0.1 = FindClusters(object = g4_res0.1,
 # Find all marker regions across clusters
 markers_res0.1 = FindAllMarkers(g4_res0.1)
 
-g4_res0.1@meta.data
+meta_res0.1 = g4_res0.1@meta.data
+cluster0 = meta_res0.1 %>% dplyr::filter(seurat_clusters == 0) %>% rownames %>% length
+print(glue("Number of cells in cluster 0: {cluster0}"))
+cluster1 = meta_res0.1 %>% dplyr::filter(seurat_clusters == 1) %>% rownames %>% length
+print(glue("Number of cells in cluster 1: {cluster1}"))
+cluster2 = meta_res0.1 %>% dplyr::filter(seurat_clusters == 2) %>% rownames %>% length
+print(glue("Number of cells in cluster 2: {cluster2}"))
+
+reads_in_peaks0 = meta_res0.1 %>% dplyr::filter(seurat_clusters == 0) %>% pull(nFeature_peaks) %>% median
+print(glue("Median read count of features in cluster 0: {reads_in_peaks0}"))
+reads_in_peaks1 = meta_res0.1 %>% dplyr::filter(seurat_clusters == 1) %>% pull(nFeature_peaks) %>% median
+print(glue("Median read count of features in cluster 1: {reads_in_peaks1}"))
+reads_in_peaks2 = meta_res0.1 %>% dplyr::filter(seurat_clusters == 2) %>% pull(nFeature_peaks) %>% median
+print(glue("Median read count of features in cluster 2: {reads_in_peaks2}"))
 
 cols = c(
   "0" = "#addd8e",
   "1" = "#bdbdbd",
   "2" = "#addd8e"
 )
+
+
 
 dim_res0.1 = DimPlot(object = g4_res0.1, label = TRUE, pt.size = 2, label.size = 7, repel = TRUE, raster = TRUE) + 
   #NoLegend() +

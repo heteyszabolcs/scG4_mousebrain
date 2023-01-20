@@ -53,6 +53,7 @@ hist = g4_peaks %>% mutate(diff = V3 - V2) %>%
   ggplot(., aes(x = diff, fill = V6)) +
   geom_histogram(position = "identity", alpha = 0.4) +
   geom_density(alpha = 1.0) +
+  xlim(200, 750) +
   scale_fill_brewer(palette = "YlOrRd") +
   labs(title = "G4 length distributions / Seurat cluster",
        x = "length (bp)",
@@ -69,7 +70,7 @@ hist
 ggsave(
   glue("{result_folder}G4_length_distr_Seurat_clst.pdf"),
   plot = hist,
-  width = 7,
+  width = 10,
   height = 7,
   device = "pdf"
 )
@@ -90,34 +91,47 @@ g4_peaks =
 # query: g4_peaks
 # subject: enhancers
 g4s_no_ol = g4_peaks[c("0", "1", "2", "3", "4", "5", "6")]
-g4_enh_quant = numeric()
-
+g4_cm_enh_quant = numeric()
 for (cluster in names(g4s_no_ol)) {
   ol = suppressWarnings(findOverlaps(g4_peaks[[cluster]], cm_enh, type = "any", minoverlap = 1))
-  g4_enh_quant = c(g4_enh_quant, length(ol))
+  g4_cm_enh_quant = c(g4_cm_enh_quant, length(ol))
 }
 
-bar = tibble(
-  overlap = g4_enh_quant,
+cl5_cm_ol = suppressWarnings(subsetByOverlaps(g4_peaks[["5"]], cm_enh, type = "any", minoverlap = 1))
+cl5_cm_ol = as.tibble(cl5_cm_ol)
+
+
+g4_gl_enh_quant = numeric()
+for (cluster in names(g4s_no_ol)) {
+  ol = suppressWarnings(findOverlaps(g4_peaks[[cluster]], gl_enh, type = "any", minoverlap = 1))
+  g4_gl_enh_quant = c(g4_gl_enh_quant, length(ol))
+}
+
+clusters = c("0", "1", "2", "3", "4", "5", "6")
+cm_bar = tibble(
+  overlap = g4_cm_enh_quant,
+  peak_count = sapply(clusters, function(x) length(g4_peaks[[which(names(g4_peaks) == x)]])),
+  enhancer_ratio = (overlap / peak_count) * 100,
   cluster = names(g4s_no_ol),
   fill_col = names(g4s_no_ol)
 ) %>%
   ggplot(data = ., aes(
-    x = reorder(cluster,-overlap),
-    y = overlap,
+    x = reorder(cluster,-enhancer_ratio),
+    y = enhancer_ratio,
     fill = fill_col
   )) +
   geom_bar(stat = "identity",
            width = 0.5,
            color = "black") +
   scale_fill_brewer(palette = "YlOrRd") +
+  scale_y_continuous(limits = c(0, 5), breaks = seq(0, 5, 1)) +
   labs(
     title = expression(paste(
       "G4 overlaps with active enhancers of ",
       italic("Cruz-Molina et al.")
     )),
     x = "Seurat cluster",
-    y = "# of G4 - active enhancer overlaps",
+    y = "active enhancer %",
     fill = "Seurat cluster"
   ) +
   theme_classic() +
@@ -126,12 +140,66 @@ bar = tibble(
     plot.title = element_text(size = 15),
     axis.text.x = element_text(size = 13, color = "black")
   )
-bar
+cm_bar
+
+cm_bar_input = tibble(
+  overlap = g4_cm_enh_quant,
+  peak_count = sapply(clusters, function(x) length(g4_peaks[[which(names(g4_peaks) == x)]])),
+  enhancer_ratio = (overlap / peak_count) * 100,
+  cluster = names(g4s_no_ol),
+  fill_col = names(g4s_no_ol)
+)
+
+print(glue("Average enhancer percentage across clusters: {round(mean(cm_bar_input$enhancer_ratio), 2)} % (SD: {round(sd(cm_bar_input$enhancer_ratio), 2)})"))
+print(glue("Average peak number over active enhancer: {round(mean(cm_bar_input$overlap), 0)} (SD: {round(sd(cm_bar_input$overlap), 0)})"))
 
 ggsave(
   glue("{result_folder}G4_overlaps_w_CruzM_active_enh.pdf"),
-  plot = bar,
-  width = 7,
+  plot = cm_bar,
+  width = 10,
+  height = 7,
+  device = "pdf"
+)
+
+clusters = c("0", "1", "2", "3", "4", "5", "6")
+gl_bar = tibble(
+  overlap = g4_gl_enh_quant,
+  peak_count = sapply(clusters, function(x) length(g4_peaks[[which(names(g4_peaks) == x)]])),
+  enhancer_ratio = (overlap / peak_count) * 100,
+  cluster = names(g4s_no_ol),
+  fill_col = names(g4s_no_ol)
+) %>%
+  ggplot(data = ., aes(
+    x = reorder(cluster,-enhancer_ratio),
+    y = enhancer_ratio,
+    fill = fill_col
+  )) +
+  geom_bar(stat = "identity",
+           width = 0.5,
+           color = "black") +
+  scale_fill_brewer(palette = "YlOrRd") +
+  scale_y_continuous(limits = c(0, 0.5), breaks = seq(0, 0.5, 0.1)) +
+  labs(
+    title = expression(paste(
+      "G4 overlaps with active enhancers of ",
+      italic("Glaser et al.")
+    )),
+    x = "Seurat cluster",
+    y = "active enhancer %",
+    fill = "Seurat cluster"
+  ) +
+  theme_classic() +
+  theme(
+    text = element_text(size = 20),
+    plot.title = element_text(size = 15),
+    axis.text.x = element_text(size = 13, color = "black")
+  )
+gl_bar
+
+ggsave(
+  glue("{result_folder}G4_overlaps_w_Glaser_active_enh.pdf"),
+  plot = gl_bar,
+  width = 10,
   height = 7,
   device = "pdf"
 )

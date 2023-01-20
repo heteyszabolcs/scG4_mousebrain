@@ -120,7 +120,7 @@ mat_grubbs_max = mat_grubbs %>% mutate(max = pmax(rownames(mat_grubbs)), type = 
   dplyr::select(seqnames, start, end, width, starts_with("cluster"), unique = type) 
 
 
-n_uniques = tibble %>% group_by(type) %>% summarise(count = n()) %>% arrange(desc(count)) %>%
+n_uniques = tibble %>% group_by(type) %>% summarise(count = dplyr::n()) %>% arrange(desc(count)) %>%
   ggplot(data = ., aes(
     x = reorder(type, -count),
     y = count,
@@ -146,15 +146,15 @@ ggsave(
   glue("{result_folder}Grubbs_test-unique_G4_peaks_bar.png"),
   plot = n_uniques,
   width = 10,
-  height = 10,
+  height = 5,
   dpi = 300,
 )
 
 ggsave(
   glue("{result_folder}Grubbs_test-unique_G4_peaks_bar.pdf"),
   plot = n_uniques,
-  width = 6,
-  height = 6,
+  width = 10,
+  height = 5,
   device = "pdf"
 )
 

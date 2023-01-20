@@ -94,6 +94,8 @@ ggsave(
 )
 
 # Create a gene activity matrix
+# Signac function: https://stuartlab.org/signac/reference/geneactivity
+# Compute counts per cell in gene body and promoter region
 gene.activities = GeneActivity(g4)
 
 g4[['GA']] = CreateAssayObject(counts = gene.activities)
