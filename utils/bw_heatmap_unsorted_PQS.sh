@@ -12,11 +12,12 @@ module load R_packages
 
 cd /proj/snic2020-6-3/SZABOLCS/LTRIS2_BRG1_H33_and_G4s/utils
 
-# computeMatrix reference-point -o ../results/deeptools/matrix_unsorted_PQS.mat.gz -S \
-# ../data/bw/canonical_PQS_mm10_binary.bw \
- # -R ../results/Seurat/callpeaks_unsorted/peak_sets/0_peaks_res0.1.bed \
-# ../results/Seurat/callpeaks_unsorted/peak_sets/1_peaks_res0.1.bed \
- # -b 3000 -a 3000 --samplesLabel "ext. PQS" --skipZeros --missingDataAsZero
+computeMatrix reference-point -o ../results/deeptools/matrix_unsorted_PQS.mat.gz -S \
+ ../data/bw/mm10_canPQS-regex_binary.bw \
+ -R ../results/Seurat/callpeaks_unsorted/peak_sets/0_peaks_res0.1.bed \
+ ../results/Seurat/callpeaks_unsorted/peak_sets/1_peaks_res0.1.bed \
+ --referencePoint center \
+ -b 3000 -a 3000 --samplesLabel "ext. PQS" --skipZeros --missingDataAsZero
 
 plotHeatmap -m ../results/deeptools/matrix_unsorted_PQS.mat.gz \
  -out "../results/deeptools/unsorted_clusters_PQS.pdf" \

@@ -20,6 +20,7 @@ computeMatrix reference-point -o ../results/deeptools/matrix_mESC_MEF_overlap.ma
  -R ../results/GenomicRanges/mESC-MEF_outputs/bulk_overlaps/MACS2_cl0_only.bed \
  ../results/GenomicRanges/mESC-MEF_outputs/bulk_overlaps/MACS2_intersection.bed \
  ../results/GenomicRanges/mESC-MEF_outputs/bulk_overlaps/MACS2_cl1_only.bed \
+ --referencePoint center \
  -b 3000 -a 3000 --samplesLabel "bulk mESC" "bulk MEF" "mESC cluster 1" "MEF cluster 0" \
  --skipZeros --missingDataAsZero
 
