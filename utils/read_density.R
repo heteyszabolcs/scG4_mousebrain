@@ -117,7 +117,8 @@ mat_grubbs_max = mat_grubbs %>% mutate(max = pmax(rownames(mat_grubbs)), type = 
     end = read_cov_grubbs$end,
     width = read_cov_grubbs$width
   ) %>%
-  dplyr::select(seqnames, start, end, width, starts_with("cluster"), unique = type) 
+  dplyr::select(seqnames, start, end, width, starts_with("cluster"), unique = type) %>% 
+  mutate(rowid = paste0(seqnames, "_", end))
 
 
 n_uniques = tibble %>% group_by(type) %>% summarise(count = dplyr::n()) %>% arrange(desc(count)) %>%
@@ -161,10 +162,9 @@ ggsave(
 # if HOMER annotation is available
 read_cov_grubbs_annot = "../results/Seurat/callpeaks_unsorted/Grubbs_test-unique_G4_peaks_0.001_annot.tsv"
 read_cov_grubbs_annot = fread(read_cov_grubbs_annot)
-read_cov_grubbs_annot = read_cov_grubbs_annot %>% dplyr::select(rowid = starts_with("PeakID"), everything()) %>% 
-  mutate(rowid = row_number())
+read_cov_grubbs_annot = read_cov_grubbs_annot %>% mutate(rowid = paste0(Chr, "_", End))
 
-read_cov_grubbs_annot = read_cov_grubbs %>% mutate(rowid = row_number()) %>% 
+read_cov_grubbs_annot = read_cov_grubbs %>% mutate(rowid = paste0(seqnames, "_", end)) %>% 
   inner_join(., read_cov_grubbs_annot, by = c("rowid" = "rowid")) %>%
   dplyr::select(
     "cluster 0" = X0,
@@ -175,11 +175,54 @@ read_cov_grubbs_annot = read_cov_grubbs %>% mutate(rowid = row_number()) %>%
     "cluster 5" = X5,
     "cluster 6" = X6,
     `Distance to TSS`,
-    `Gene Name`
-  ) %>% 
-  mutate(rowid = row_number())
+    `Gene Name`,
+    rowid
+  ) 
 
-cluster6 = mat_grubbs_max %>% mutate(rowid = row_number()) %>%
+# get example (promoter of Tcn2 gene)
+tcn2 = read_cov_grubbs_annot %>% dplyr::filter(`Gene Name` == "Tcn2") %>% 
+  pivot_longer("cluster 0":"cluster 6") %>% 
+  dplyr::select(read_density = value, Seurat_cluster = name, gene = `Gene Name`)
+tcn2 = tcn2 %>%
+  ggplot(data = ., aes(
+    x = reorder(Seurat_cluster, -read_density),
+    y = read_density,
+    fill = Seurat_cluster
+  )) +
+  geom_bar(stat = "identity",
+           width = 0.5,
+           color = "black") +
+  scale_fill_brewer(palette = "Reds") +
+  labs(title = "Tcn2",
+       x = "Seurat cluster",
+       y = "read density",
+       fill = "") +
+  guides(fill = "none") + 
+  theme_classic() +
+  theme(
+    text = element_text(size = 20),
+    plot.title = element_text(size = 15),
+    axis.text.x = element_text(size = 13, color = "black")
+  )
+tcn2
+
+ggsave(
+  glue("{result_folder}Grubbs_test-cluster6_example_Tcn2.png"),
+  plot = tcn2,
+  width = 6,
+  height = 3,
+  dpi = 300,
+)
+
+ggsave(
+  glue("{result_folder}Grubbs_test-cluster6_example_Tcn2.pdf"),
+  plot = tcn2,
+  width = 6,
+  height = 3,
+  device = "pdf"
+)
+
+cluster6 = mat_grubbs_max %>% 
   inner_join(., read_cov_grubbs_annot, by = c("rowid" = "rowid")) %>%
   dplyr::filter(unique == "6") %>%
   dplyr::select(Chr = "seqnames", Start = "start", End = "end")
@@ -189,8 +232,7 @@ write_tsv(cluster6,
           col_names = FALSE)
 
 # inner join with annotation - be careful, here some genes will be omitted as they have not been annotated
-mat_grubbs_max = mat_grubbs_max %>% 
-  mutate(rowid = row_number()) %>% inner_join(., read_cov_grubbs_annot, by = c("rowid" = "rowid")) %>%
+mat_grubbs_max = mat_grubbs_max %>% inner_join(., read_cov_grubbs_annot, by = c("rowid" = "rowid")) %>%
   dplyr::select(
     "cluster 0",
     "cluster 1",

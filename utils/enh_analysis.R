@@ -97,9 +97,53 @@ for (cluster in names(g4s_no_ol)) {
   g4_cm_enh_quant = c(g4_cm_enh_quant, length(ol))
 }
 
-cl5_cm_ol = suppressWarnings(subsetByOverlaps(g4_peaks[["5"]], cm_enh, type = "any", minoverlap = 1))
-cl5_cm_ol = as.tibble(cl5_cm_ol)
 
+
+
+get_signals = function(selected_cluster = "0") {
+  require("wigglescout")
+  cl_cm_ol = suppressWarnings(subsetByOverlaps(g4_peaks[[selected_cluster]], cm_enh, type = "any", minoverlap = 1))
+  cl_cm_ol = as.tibble(cl_cm_ol)
+  cl_cm_ol = suppressWarnings(subsetByOverlaps(g4_peaks[[selected_cluster]], cm_enh, type = "any", minoverlap = 1))
+  cl_cm_ol = as.tibble(cl_cm_ol)
+  
+  bigwigs = c(
+    "../results/Seurat/callpeaks_unsorted/cluster_bigwigs/0.bw",
+    "../results/Seurat/callpeaks_unsorted/cluster_bigwigs/1.bw",
+    "../results/Seurat/callpeaks_unsorted/cluster_bigwigs/2.bw",
+    "../results/Seurat/callpeaks_unsorted/cluster_bigwigs/3.bw",
+    "../results/Seurat/callpeaks_unsorted/cluster_bigwigs/4.bw",
+    "../results/Seurat/callpeaks_unsorted/cluster_bigwigs/5.bw",
+    "../data/bw/Martire2019_ESC_H33WT_H3K27ac.bw"
+  )
+  
+  bed = cl_cm_ol[, 1:3]
+  write_tsv(
+    bed,
+    glue(
+      "../data/bed/Cruz_Molina_enh-unsorted_cluster{selected_cluster}.bed"
+    ),
+    col_names = FALSE
+  )
+  bed = glue("../data/bed/Cruz_Molina_enh-unsorted_cluster{selected_cluster}.bed")
+  selected_bw = glue("../results/Seurat/callpeaks_unsorted/cluster_bigwigs/{selected_cluster}.bw")
+  bigwigs = c(bigwigs[which(bigwigs != selected_bw)], selected_bw)
+  
+  read_cov = bw_loci(bigwigs, loci = bed)
+  read_cov = as.data.frame(read_cov)
+  
+  columns = colnames(read_cov)[grepl("X", colnames(read_cov)[which(colnames(read_cov) != glue("X{selected_cluster}"))])]
+  read_cov_filt = read_cov %>% 
+    mutate(average = rowMeans(dplyr::select(., columns))) %>% 
+    mutate(enrichment = get(glue("X{selected_cluster}")) / average) %>% 
+    dplyr::filter(enrichment >= 10)
+  
+  return(read_cov_filt)
+  
+}
+
+cl3_over_cm_enh = get_signals("3")
+cl5_over_cm_enh = get_signals("5")
 
 g4_gl_enh_quant = numeric()
 for (cluster in names(g4s_no_ol)) {

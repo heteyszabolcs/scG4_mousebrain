@@ -70,14 +70,15 @@ rownames(markers_wide) = row_names
 markers_wide[is.na(markers_wide)] = 0
 
 G4_prox_marker_genes = marques_marker_genes$V1[which(marques_marker_genes$V1 %in% rownames(markers_wide))]
+G4_prox_marker_genes = append(G4_prox_marker_genes, "Tcn2")
 G4_prox_marker_genes_pos = which(rownames(markers_wide) %in% G4_prox_marker_genes)
 
 pdf(
   file = glue("{result_folder}FindAllMarkers_hm_p0.001.pdf"),
-  width = 5,
-  height = 5
+  width = 4,
+  height = 6
 )
-ha = rowAnnotation(foo = anno_mark(at = G4_prox_marker_genes_pos, labels = G4_prox_marker_genes))
+ha = rowAnnotation(foo = anno_mark(at = G4_prox_marker_genes_pos, labels = rownames(markers_wide)[G4_prox_marker_genes_pos]))
 col_fun = colorRamp2(c(0, 0.5, 1), c("white", "#fec44f", "red"))
 hm = Heatmap(
   markers_wide,
@@ -98,7 +99,7 @@ hm = Heatmap(
   cluster_rows = TRUE,
   show_row_dend = FALSE,
   heatmap_width = unit(5, "cm"),
-  heatmap_height = unit(10, "cm"),
+  heatmap_height = unit(13, "cm"),
   row_names_gp = gpar(fontsize = 1),
   column_names_gp = gpar(fontsize = 12),
   column_names_rot = 0
@@ -109,7 +110,7 @@ dev.off()
 png(
   file = glue("{result_folder}FindAllMarkers_hm_p0.001.png"),
   width = 10,
-  height = 10,
+  height = 12,
   units = "cm",
   res = 300
 )
