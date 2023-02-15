@@ -114,6 +114,10 @@ p2 = DimPlot(
 
 # find all markers in scRNA-Seq data
 rna@active.ident = rna$cell_class
+
+# export scRNA Seurat object
+saveRDS(rna, glue("../results/Seurat/scRNASeq_GSE75330.rds"))
+
 #markers = FindAllMarkers(rna)
 markers = read_tsv("../results/Seurat/scRNA-Seq_Marques_et_al-FindAllMarkers_output.tsv")
 markers.pos = markers[markers$p_val < 0.05 &
@@ -159,8 +163,6 @@ cell_class_pred = TransferData(
   dims = 1:50,
   prediction.assay = TRUE
 )
-
-
 
 saveRDS(cell_class_pred, glue("{result_folder}sorted_cell_label_preds.Rds"))
 

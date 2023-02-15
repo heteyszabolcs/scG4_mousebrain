@@ -19,7 +19,7 @@ This notebook provides the steps below:\
 3.) Find marker regions \
 4.) peaks assay\
   - gene activity assay\
-  - Cluster-specific peak calling (CallPeaks function)\
+  - Cluster-specific peak calling (CallPeaks function. It depends on MACS2 and linux)\
   
 seurat_resolution parameter: \
   by default: 0.8\

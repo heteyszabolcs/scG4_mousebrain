@@ -20,6 +20,7 @@ Heatmaps:\
 - avg log fold changes of found marker genes (G4s close to TSS)\
 - expression of marker genes - [Marques et al.](https://www.science.org/doi/10.1126/science.aaf6463?url_ver=Z39.88-2003&rfr_id=ori:rid:crossref.org&rfr_dat=cr_pub%20%200pubmed) scRNA-Seq\
 - expression of marker genes - [Bartosovic et al.](https://www.nature.com/articles/s41587-021-00869-9) scRNA-Seq\
+- visualization of the relation between sign. enriched promoter G4s and Marques et al. scRNA-Seq marker genes (volcanos)
 
 G4 marker regions (FindAllMarkers function) were annotated by HOMER using mm10 reference
 

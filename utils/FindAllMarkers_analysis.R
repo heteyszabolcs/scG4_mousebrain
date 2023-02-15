@@ -25,6 +25,13 @@ markers = fread("../results/Seurat/callpeaks_unsorted/FindAllMarkers_output_anno
 markers[markers == ""] <- NA
 markers = markers %>% na.omit()
 
+# Grubb's test output
+grubbs = fread(
+  "../results/Seurat/callpeaks_unsorted/Grubbs_test-unique_G4_peaks_0.001_joined.tsv"
+)
+print(glue("Grubbs test found {as.character(length(unique(grubbs$`Gene Name`)))} unique peak"))
+grubbs = grubbs %>% dplyr::filter(abs(`Distance to TSS`) < 3000)
+
 # filter and export to bed
 clusterwise = markers %>% dplyr::filter(abs(avg_log2FC) > 0.2 &
                                           p_val_adj < 0.05)
@@ -43,7 +50,7 @@ for (i in clusters) {
 # export clusters to tsv
 for (i in clusters) {
   subset = markers %>% dplyr::filter(cluster == i) %>%
-    dplyr::select(`Gene Name`, avg_log2FC, p_val_adj, `Distance to TSS`) %>% 
+    dplyr::select(`Gene Name`, avg_log2FC, p_val_adj, `Distance to TSS`) %>%
     dplyr::filter(abs(`Distance to TSS`) < 3000)
   write_tsv(
     subset,
@@ -55,6 +62,18 @@ for (i in clusters) {
 # keep significant marker regions proximal to TSS
 markers = markers %>% dplyr::filter(abs(`Distance to TSS`) < 3000) %>%
   dplyr::filter(p_val_adj < 0.001)
+print(glue("FindAllMarkers found {as.character(length(unique(markers$`Gene Name`)))} promoter proximal G4 markers"))
+markers_grubbs_int = intersect(unique(markers$`Gene Name`), unique(grubbs$`Gene Name`))
+print(
+  glue(
+    "{as.character(length(markers_grubbs_int))} of {as.character(dim(grubbs)[1])} outliers have been found by Seurat"
+  )
+)
+
+markers_all = fread("../results/Seurat/callpeaks_unsorted/FindAllMarkers_output_annot.tsv")
+setdiff(unique(grubbs[which(unique == "4")]$`Gene Name`), unique(markers[which(cluster == "4")]$`Gene Name`) 
+          )
+
 
 markers_wide = pivot_wider(
   markers,
@@ -133,9 +152,9 @@ for (gene in markers$`Gene Name`) {
 # heatmap
 ms = list()
 for (cluster in levels(unique(Idents(marques)))) {
-  m = t(as.matrix(norm[existing_gene_symbols,]))
+  m = t(as.matrix(norm[existing_gene_symbols, ]))
   cluster_barcodes = WhichCells(marques, idents = cluster)
-  m = m[cluster_barcodes,]
+  m = m[cluster_barcodes, ]
   t = tibble(means = colMeans(m))
   t = t %>%
     mutate(gene_symbol = existing_gene_symbols) %>%
@@ -260,8 +279,12 @@ pdf(
   width = 6,
   height = 6
 )
-volcano(all_markers %>% dplyr::filter(scRNA_Seq_cluster == "MOL" & G4_cluster == 5), color = "#f0b265", 
-        title = "MOL")
+volcano(
+  all_markers %>% dplyr::filter(scRNA_Seq_cluster == "MOL" &
+                                  G4_cluster == 5),
+  color = "#f0b265",
+  title = "MOL"
+)
 dev.off()
 png(
   file = glue("{result_folder}volcano_MOL-G4_fc.png"),
@@ -270,16 +293,24 @@ png(
   units = "cm",
   res = 300
 )
-volcano(all_markers %>% dplyr::filter(scRNA_Seq_cluster == "MOL" & G4_cluster == 5), color = "#f0b265", 
-        title = "MOL")
+volcano(
+  all_markers %>% dplyr::filter(scRNA_Seq_cluster == "MOL" &
+                                  G4_cluster == 5),
+  color = "#f0b265",
+  title = "MOL"
+)
 dev.off()
 pdf(
   file = glue("{result_folder}volcano_MFOL-MOL-G4_fc.pdf"),
   width = 6,
   height = 6
 )
-volcano(all_markers %>% dplyr::filter(scRNA_Seq_cluster == "MFOL/MOL"& G4_cluster == 5), color = "#f0b265", 
-        title = "MFOL/MOL")
+volcano(
+  all_markers %>% dplyr::filter(scRNA_Seq_cluster == "MFOL/MOL" &
+                                  G4_cluster == 5),
+  color = "#f0b265",
+  title = "MFOL/MOL"
+)
 dev.off()
 png(
   file = glue("{result_folder}volcano_MFOL-MOL-G4_fc.png"),
@@ -288,16 +319,24 @@ png(
   units = "cm",
   res = 300
 )
-volcano(all_markers %>% dplyr::filter(scRNA_Seq_cluster == "MFOL/MOL"& G4_cluster == 5), color = "#f0b265", 
-        title = "MFOL/MOL")
+volcano(
+  all_markers %>% dplyr::filter(scRNA_Seq_cluster == "MFOL/MOL" &
+                                  G4_cluster == 5),
+  color = "#f0b265",
+  title = "MFOL/MOL"
+)
 dev.off()
 pdf(
   file = glue("{result_folder}volcano_COP-G4_fc.pdf"),
   width = 6,
   height = 6
 )
-volcano(all_markers %>% dplyr::filter(scRNA_Seq_cluster == "COP" & G4_cluster == 5), color = "#f0b265", 
-        title = "COP")
+volcano(
+  all_markers %>% dplyr::filter(scRNA_Seq_cluster == "COP" &
+                                  G4_cluster == 5),
+  color = "#f0b265",
+  title = "COP"
+)
 dev.off()
 png(
   file = glue("{result_folder}volcano_COP-G4_fc.png"),
@@ -306,16 +345,24 @@ png(
   units = "cm",
   res = 300
 )
-volcano(all_markers %>% dplyr::filter(scRNA_Seq_cluster == "COP" & G4_cluster == 5), color = "#f0b265", 
-        title = "COP")
+volcano(
+  all_markers %>% dplyr::filter(scRNA_Seq_cluster == "COP" &
+                                  G4_cluster == 5),
+  color = "#f0b265",
+  title = "COP"
+)
 dev.off()
 pdf(
   file = glue("{result_folder}volcano_VLMC-G4_fc.pdf"),
   width = 6,
   height = 6
 )
-volcano(all_markers %>% dplyr::filter(scRNA_Seq_cluster == "VLMC" & G4_cluster == 5), color = "#f0b265", 
-        title = "VLMC")
+volcano(
+  all_markers %>% dplyr::filter(scRNA_Seq_cluster == "VLMC" &
+                                  G4_cluster == 5),
+  color = "#f0b265",
+  title = "VLMC"
+)
 dev.off()
 png(
   file = glue("{result_folder}volcano_VLMC-G4_fc.png"),
@@ -324,16 +371,24 @@ png(
   units = "cm",
   res = 300
 )
-volcano(all_markers %>% dplyr::filter(scRNA_Seq_cluster == "VLMC" & G4_cluster == 5), color = "#f0b265", 
-        title = "VLMC")
+volcano(
+  all_markers %>% dplyr::filter(scRNA_Seq_cluster == "VLMC" &
+                                  G4_cluster == 5),
+  color = "#f0b265",
+  title = "VLMC"
+)
 dev.off()
 pdf(
   file = glue("{result_folder}volcano_OPC-G4_fc.pdf"),
   width = 6,
   height = 6
 )
-volcano(all_markers %>% dplyr::filter(scRNA_Seq_cluster == "OPC" & G4_cluster == 5), color = "#f0b265", 
-        title = "OPC")
+volcano(
+  all_markers %>% dplyr::filter(scRNA_Seq_cluster == "OPC" &
+                                  G4_cluster == 5),
+  color = "#f0b265",
+  title = "OPC"
+)
 dev.off()
 png(
   file = glue("{result_folder}volcano_OPC-G4_fc.png"),
@@ -342,12 +397,16 @@ png(
   units = "cm",
   res = 300
 )
-volcano(all_markers %>% dplyr::filter(scRNA_Seq_cluster == "OPC" & G4_cluster == 5), color = "#f0b265", 
-        title = "OPC")
+volcano(
+  all_markers %>% dplyr::filter(scRNA_Seq_cluster == "OPC" &
+                                  G4_cluster == 5),
+  color = "#f0b265",
+  title = "OPC"
+)
 dev.off()
 
 # lower scRNA-Seq fold change thr and color by G4 Seurat clusters
-marques_markers_filt = marques_markers %>% dplyr::filter(p_val_adj < 0.05, abs(avg_log2FC) > 1) %>% 
+marques_markers_filt = marques_markers %>% dplyr::filter(p_val_adj < 0.05, abs(avg_log2FC) > 1) %>%
   dplyr::filter(gene %in% sign_g4_markers)
 
 all_markers = marques_markers_filt %>% inner_join(., markers, by = c("gene" = "Gene Name")) %>%
@@ -359,17 +418,34 @@ all_markers = marques_markers_filt %>% inner_join(., markers, by = c("gene" = "G
     G4_padj = p_val_adj.y,
     scRNA_Seq_cluster = cluster.x,
     G4_cluster = cluster.y
-  ) 
+  )
 
 keyvalues = ifelse(
-  all_markers$G4_cluster == 4, '#8bb0d1',
-  ifelse(all_markers$G4_cluster == 5, '#f0b265',
-         ifelse(all_markers$G4_cluster == 6, '#b5db68', 
-                ifelse(all_markers$G4_cluster == 3, '#EB8073',
-                       ifelse(all_markers$G4_cluster == 2, '#BDB8D8',
-                              ifelse(all_markers$G4_cluster == 1, '#FDFFB2',
-                                     ifelse(all_markers$G4_cluster == 0, '#99D1C4',
-         'grey')))))))
+  all_markers$G4_cluster == 4,
+  '#8bb0d1',
+  ifelse(
+    all_markers$G4_cluster == 5,
+    '#f0b265',
+    ifelse(
+      all_markers$G4_cluster == 6,
+      '#b5db68',
+      ifelse(
+        all_markers$G4_cluster == 3,
+        '#EB8073',
+        ifelse(
+          all_markers$G4_cluster == 2,
+          '#BDB8D8',
+          ifelse(
+            all_markers$G4_cluster == 1,
+            '#FDFFB2',
+            ifelse(all_markers$G4_cluster == 0, '#99D1C4',
+                   'grey')
+          )
+        )
+      )
+    )
+  )
+)
 keyvalues[is.na(keyvalues)] <- 'grey'
 names(keyvalues)[keyvalues == '#99D1C4'] <- '0'
 names(keyvalues)[keyvalues == '#FDFFB2'] <- '1'
@@ -474,7 +550,11 @@ all_markers = marques_markers %>% inner_join(., markers, by = c("gene" = "Gene N
     G4_cluster = cluster.y
   )
 
-ggplot(all_markers, aes(x = scRNA_Seq_fc, y = G4_fc, color = factor(G4_cluster))) +
+ggplot(all_markers, aes(
+  x = scRNA_Seq_fc,
+  y = G4_fc,
+  color = factor(G4_cluster)
+)) +
   geom_point(size = 2) +
   scale_color_brewer(palette = "Set3") +
   labs(
@@ -489,7 +569,8 @@ ggplot(all_markers, aes(x = scRNA_Seq_fc, y = G4_fc, color = factor(G4_cluster))
     text = element_text(size = 14),
     plot.title = element_text(size = 14),
     axis.text.x = element_text(size = 12, color = "black"),
-    axis.text.y = element_text(size = 12, color = "black"))
+    axis.text.y = element_text(size = 12, color = "black")
+  )
 
 ggsave(
   plot = last_plot(),
@@ -505,7 +586,11 @@ ggsave(
   dpi = 300
 )
 
-ggplot(all_markers, aes(x = scRNA_Seq_fc, y = G4_fc, color = factor(scRNA_Seq_cluster))) +
+ggplot(all_markers, aes(
+  x = scRNA_Seq_fc,
+  y = G4_fc,
+  color = factor(scRNA_Seq_cluster)
+)) +
   geom_point(size = 2) +
   scale_color_brewer(palette = "Set3") +
   labs(
@@ -520,7 +605,8 @@ ggplot(all_markers, aes(x = scRNA_Seq_fc, y = G4_fc, color = factor(scRNA_Seq_cl
     text = element_text(size = 14),
     plot.title = element_text(size = 14),
     axis.text.x = element_text(size = 12, color = "black"),
-    axis.text.y = element_text(size = 12, color = "black"))
+    axis.text.y = element_text(size = 12, color = "black")
+  )
 
 ggsave(
   plot = last_plot(),
@@ -543,9 +629,9 @@ for (gene in markers$`Gene Name`) {
 # heatmap
 ms = list()
 for (cluster in levels(unique(Idents(scrna)))) {
-  m = t(as.matrix(norm[existing_gene_symbols,]))
+  m = t(as.matrix(norm[existing_gene_symbols, ]))
   cluster_barcodes = WhichCells(scrna, idents = cluster)
-  m = m[cluster_barcodes,]
+  m = m[cluster_barcodes, ]
   t = tibble(means = colMeans(m))
   t = t %>%
     mutate(gene_symbol = existing_gene_symbols) %>%
@@ -599,5 +685,3 @@ dev.off()
 ## run FindAllMarkers on Bartosovic scRNA-Seq object (default is wilcoxon test)
 #bartosovic_markers = FindAllMarkers(scrna, logfc.threshold = 0.2)
 #write_tsv(bartosovic_markers, "../data/GSE163484/FindAllMarker_fc0.2_wilcox.tsv")
-
-
