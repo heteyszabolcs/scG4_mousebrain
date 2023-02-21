@@ -23,19 +23,15 @@ suppressPackageStartupMessages({
 
 set.seed(5)
 
-# G4 - scRNA data integration
-# main source: 
-# https://github.com/Castelo-Branco-lab/scCut-Tag_2020/blob/master/notebooks/integration/integration_H3K4me3_marques.Rmd
-
+# path to result folder
+cellranger_folder = "../data/CellRanger/GFP_sorted/"
 # path to result folder
 result_folder = "../results/Seurat/callpeaks_GFPsorted/"
 
-# Seurat object (brain unsorted / brain GFP sorted)
-unsorted = readRDS(file = "../results/Seurat/callpeaks_unsorted/unsorted.Rds")
-unsorted_res0.1 = readRDS(file = "../results/Seurat/callpeaks_unsorted/unsorted_res0.1.Rds")
-sorted = readRDS(file = "../results/Seurat/callpeaks_GFPsorted/GFPsorted.Rds")
+# G4 data
+g4 = readRDS(file = "../results/Seurat/callpeaks_GFPsorted/GFPsorted.Rds")
 
-# Marques et al. oligo scRNA data
+# scRNA data
 rna = read.table(
   "../data/GSE75330/GSE75330_Marques_et_al_mol_counts2.tab",
   stringsAsFactors = FALSE,
@@ -55,227 +51,43 @@ rna = CreateSeuratObject(counts = rna,
                          meta.data = annot,
                          assay = 'RNA')
 
-# Seurat workflow
-all.genes = rownames(rna)
-rna = NormalizeData(rna,
-                    normalization.method = "LogNormalize",
-                    scale.factor = 10000)
-rna = FindVariableFeatures(rna, selection.method = "vst", nfeatures = 2000)
-rna = ScaleData(rna, features = all.genes)
-rna = RunPCA(rna, features = VariableFeatures(object = rna))
-rna = RunUMAP(rna, dims = 1:20)
-
-new_ids = as.character(rna@meta.data$cell_class)
-new_ids[new_ids == 'NFOL2'] = 'NFOL'
-new_ids[new_ids == 'NFOL1'] = 'NFOL'
-new_ids[new_ids == 'MFOL2'] = 'MFOL'
-new_ids[new_ids == 'MFOL1'] = 'MFOL'
-new_ids[new_ids == 'MOL1'] = 'MOL'
-new_ids[new_ids == 'MOL2'] = 'MOL'
-new_ids[new_ids == 'MOL3'] = 'MOL'
-new_ids[new_ids == 'MOL4'] = 'MOL'
-new_ids[new_ids == 'MOL5'] = 'MOL'
-new_ids[new_ids == 'MOL6'] = 'MOL'
-rna@meta.data$merged_cell_class = new_ids
-
-p1 = DimPlot(sorted,
-             pt.size = 2,
-             label.size = 7,
-             repel = TRUE,
-             raster = TRUE) +
-  scale_color_brewer(palette = "Set3") +
-  xlim(-15, 15) +
-  ylim(-15, 15) +
-  ggtitle(" ") +
-  theme(
-    text = element_text(size = 25),
-    plot.title = element_text(size = 20),
-    axis.text.x = element_text(size = 25, color = "black"),
-    axis.text.y = element_text(size = 25, color = "black")
-  )
-p2 = DimPlot(
-  rna,
-  pt.size = 2,
-  label.size = 7,
-  group.by = 'merged_cell_class',
-  repel = TRUE,
-  raster = TRUE
-) +
-  scale_color_brewer(palette = "Set3") +
-  xlim(-15, 15) +
-  ylim(-15, 15) +
-  ggtitle(" ") +
-  theme(
-    text = element_text(size = 25),
-    plot.title = element_text(size = 20),
-    axis.text.x = element_text(size = 25, color = "black"),
-    axis.text.y = element_text(size = 25, color = "black")
-  )
-
-# find all markers in scRNA-Seq data
-rna@active.ident = rna$cell_class
-
-# export scRNA Seurat object
-saveRDS(rna, glue("../results/Seurat/scRNASeq_GSE75330.rds"))
-
-#markers = FindAllMarkers(rna)
-markers = read_tsv("../results/Seurat/scRNA-Seq_Marques_et_al-FindAllMarkers_output.tsv")
-markers.pos = markers[markers$p_val < 0.05 &
-                        markers$avg_log2FC > 0.5,]
-
-# write_tsv(markers,
-#           "../results/Seurat/scRNA-Seq_Marques_et_al-FindAllMarkers_output.tsv")
-
-DefaultAssay(sorted) = "GA"
-DefaultAssay(rna) = "RNA"
-
-common.genes = intersect(rownames(rna), rownames(sorted))
-
-# anchor identification between G4 scCnT and scRNA-Seq data sets
-transfer.anchors = FindTransferAnchors(
-  reference = rna,
-  query = sorted,
-  reduction = 'cca',
-  query.assay = 'GA',
-  reference.assay = 'RNA',
-  k.filter = NA,
-  features = common.genes
-)
-
-genes.use = VariableFeatures(rna)
-refdata = GetAssayData(rna, assay = "RNA", slot = "data")[genes.use, ]
-
-## Transfer data (Seurat)
-# imputation - data transfer
-imputation = TransferData(
-  anchorset = transfer.anchors,
-  refdata = refdata,
-  weight.reduction = sorted[["lsi"]],
-  dims = 1:50,
-  prediction.assay = TRUE
-)
-
-# predict cell labels
-cell_class_pred = TransferData(
-  anchorset = transfer.anchors,
-  refdata = rna@meta.data$merged_cell_class,
-  weight.reduction = sorted[["lsi"]],
-  dims = 1:50,
-  prediction.assay = TRUE
-)
-
-saveRDS(cell_class_pred, glue("{result_folder}sorted_cell_label_preds.Rds"))
-
-predictions = as.matrix(cell_class_pred@data)
-predictions = predictions[rownames(predictions) != "max",]
-col_fun = colorRamp2(c(0, 0.5, 1), c("#421654", "#458f8a", "#f0e527"))
-pdf(
-  file = glue("{result_folder}predicton_score_heatmap.pdf"),
-  width = 8,
-  height = 6
-)
-Heatmap(
-  predictions,
-  column_title = " ",
-  row_title = " ",
-  name = "pred. score",
-  # row_km = 2,
-  # column_km = 2,
-  clustering_method_rows = "complete",
-  col = col_fun,
-  #rect_gp = gpar(col = "black", lwd = 0.1),
-  show_column_dend = TRUE,
-  cluster_columns = TRUE,
-  cluster_rows = TRUE,
-  show_row_dend = FALSE,
-  show_column_names = FALSE,
-  heatmap_width = unit(17, "cm"),
-  heatmap_height = unit(6, "cm"),
-  row_names_gp = gpar(fontsize = 12),
-  column_names_rot = 90
-)
-dev.off()
-
-types = rownames(predictions)
-predictions = as.data.frame(predictions)
-predictions$types = types
-predictions_long = predictions %>% pivot_longer(., cols = c("AAACGAAAGAAGCCGT-1":"TTTGTGTTCTCGCGTT-1"),
-                                                names_to = "cell_id", values_to = "pred_score")
-meta = as_tibble(sorted@meta.data)
-meta = meta %>% mutate(cell_id = rownames(sorted@meta.data))
-meta = predictions_long %>% inner_join(., meta, by = "cell_id")
-
-pred_boxplots = lapply(types, function(x) {
-  meta = meta %>% dplyr::filter(types == x)
-  plot = ggplot(meta,
-                aes(x = seurat_clusters, y = pred_score, fill = seurat_clusters)) +
-    geom_boxplot(color = "black") +
-    scale_fill_brewer(palette = "Set3") +
-    ylim(0, 1) +
-    labs(
-      title = x,
-      x = "",
-      y = "",
-      fill = ""
-    ) +
-    theme_classic() +
-    guides(fill = "none") +
-    theme(
-      text = element_text(size = 9),
-      plot.title = element_text(size = 15, face = "bold"),
-      axis.text.x = element_text(size = 12, color = "black"),
-      axis.text.y = element_text(size = 12, color = "black")
-    )
-  return(print(plot))
-})
-
-pred_boxplots = ggarrange(plotlist = pred_boxplots)
-
-ggsave(
-  glue("{result_folder}predicton_score_boxplots.pdf"),
-  plot = pred_boxplots,
-  width = 10,
-  height = 7,
-  device = "pdf"
-)
-
-sorted[['RNA']] = imputation
-saveRDS(sorted, glue("{result_folder}sorted_int_Marques.Rds"))
-sorted = readRDS(glue("{result_folder}sorted_int_Marques.Rds"))
 
 rna@meta.data$data_type = "scRNA-Seq (Marques et al.)"
-sorted@meta.data$data_type = "sorted G4 scCut&Tag"
+g4@meta.data$data_type = "sorted G4 scCut&Tag"
 
-# FeaturePlot(
-#   sorted,
-#   features = "nCount_peaks",
-#   min.cutoff = 0,
-#   max.cutoff = 3000,
-#   raster = TRUE
-# ) +
-#   xlim(-15, 15) +
-#   ylim(-10, 10) +
-#   scale_color_gradient2(
-#     low = "#0d0a1e",
-#     mid = "#c44a46",
-#     high = "#eef07a",
-#     midpoint = 1500
-#   ) +
-#   theme(
-#     legend.position = 'bottom',
-#     text = element_text(size = 15),
-#     plot.title = element_text(size = 20),
-#     axis.text.x = element_text(size = 25, color = "black"),
-#     axis.text.y = element_text(size = 25, color = "black")
-#   ) +
-#   NoAxes()
+merged_seurat = merge(
+  rna,
+  y = g4,
+  add.cell.ids = c("scRNA-Seq (Marques et al.)", "sorted G4 scCut&Tag"),
+  project = "int"
+)
 
-coembed = merge(x = rna, y = sorted)
+merged_seurat$mitoPercent <- PercentageFeatureSet(merged_seurat, pattern='^MT-')
 
-coembed = ScaleData(coembed, features = genes.use, do.scale = FALSE)
-coembed = RunPCA(coembed, features = genes.use, verbose = FALSE)
-ElbowPlot(coembed)
-coembed = RunUMAP(coembed, dims = 1:15)
+# perform standard workflow steps to figure out if we see any batch effects --------
+merged_seurat <- NormalizeData(object = merged_seurat)
+merged_seurat <- FindVariableFeatures(object = merged_seurat)
+merged_seurat <- ScaleData(object = merged_seurat)
+merged_seurat <- RunPCA(object = merged_seurat)
+ElbowPlot(merged_seurat)
+merged_seurat <- FindNeighbors(object = merged_seurat, dims = 1:10)
+merged_seurat <- FindClusters(object = merged_seurat)
+merged_seurat <- RunUMAP(object = merged_seurat, dims = 1:10)
+
+x = merged_seurat@meta.data
+
+# plot
+p1 <- DimPlot(merged_seurat, reduction = 'umap', group.by = 'data_type')
+p1
+p2 <- DimPlot(merged_seurat, reduction = 'umap', group.by = 'cell_class')
+p2
+
+
+
+obj.list <- SplitObject(merged_seurat, split.by = 'data_type')
+# select integration features
+features <- SelectIntegrationFeatures(object.list = obj.list, nfeatures = 500)
+rm(g4); rm(rna)
 
 new_ids = as.character(coembed@meta.data$cell_class)
 new_ids[new_ids == 'NFOL2'] = 'NFOL'
@@ -289,6 +101,21 @@ new_ids[new_ids == 'MOL4'] = 'MOL'
 new_ids[new_ids == 'MOL5'] = 'MOL'
 new_ids[new_ids == 'MOL6'] = 'MOL'
 coembed@meta.data$cell_class = new_ids
+
+# for(i in 1:length(obj.list)){
+#   print(obj.list[[i]])
+#   obj.list[[i]] <- NormalizeData(object = obj.list[[i]])
+#   obj.list[[i]] <- FindVariableFeatures(object = obj.list[[i]],
+#                                         selection.method = "vst", nfeatures = 100)
+# }
+# rm(coembed)
+
+# select integration features
+features <- SelectIntegrationFeatures(object.list = obj.list, nfeatures = 500)
+# find integration anchors (CCA)
+anchors <- FindIntegrationAnchors(object.list = obj.list,
+                                  anchor.features = features)
+
 
 # Feature plots
 create_expr_feature_plot = function(marker_gene) {
@@ -460,13 +287,13 @@ g4_violins = lapply(best_marques_markers, function(x)
     xlab(" ") +
     ylim(0, 0.00005) +
     guides(legend = "none", fill = "none") +
-  stat_compare_means(label.y = 4e-05, label.x = 1.2, size = 3) +
-  stat_compare_means(
-    label = "p.signif",
-    method = "t.test",
-    ref.group = ".all.",
-    label.y = 50
-  ))
+    stat_compare_means(label.y = 4e-05, label.x = 1.2, size = 3) +
+    stat_compare_means(
+      label = "p.signif",
+      method = "t.test",
+      ref.group = ".all.",
+      label.y = 50
+    ))
 
 
 g4_violins = ggarrange(plotlist = g4_violins)
@@ -490,7 +317,7 @@ ggsave(
 
 # heatmap of expression markers
 hm = DoHeatmap(rna, features = best_marques_markers,
-          group.by = "merged_cell_class", raster = FALSE) +
+               group.by = "merged_cell_class", raster = FALSE) +
   scale_fill_gradientn(colors = c("#0d0a1e", "#c44a46", "#eef07a")) +
   theme(
     axis.text.y = element_text(size = 18, color = "black")
@@ -778,8 +605,8 @@ cols = c(
   "2" = "#bdbdbd",
   "3" = "#de2d26",
   "4" = "#bdbdbd")
-  # "5" = "#bdbdbd",
-  # "6" = "#bdbdbd"
+# "5" = "#bdbdbd",
+# "6" = "#bdbdbd"
 
 
 coembed_cluster3 = DimPlot(
@@ -820,8 +647,8 @@ cols = c(
   "2" = "#bdbdbd",
   "3" = "#bdbdbd",
   "4" = "#de2d26")
-  # "5" = "#bdbdbd",
-  # "6" = "#bdbdbd"
+# "5" = "#bdbdbd",
+# "6" = "#bdbdbd"
 
 coembed_cluster4 = DimPlot(
   coembed,
@@ -861,8 +688,8 @@ cols = c(
   "2" = "#bdbdbd",
   "3" = "#bdbdbd",
   "4" = "#bdbdbd")
-  # "5" = "#de2d26",
-  # "6" = "#bdbdbd"
+# "5" = "#de2d26",
+# "6" = "#bdbdbd"
 
 
 # coembed_cluster5 = DimPlot(
@@ -903,9 +730,9 @@ cols = c(
   "2" = "#bdbdbd",
   "3" = "#bdbdbd",
   "4" = "#bdbdbd"
-#   "5" = "#bdbdbd",
-#   "6" = "#de2d26"
- )
+  #   "5" = "#bdbdbd",
+  #   "6" = "#de2d26"
+)
 
 # coembed_cluster6 = DimPlot(
 #   coembed,
