@@ -1,9 +1,12 @@
-library("Seurat")
-library("Signac")
-library("tidyverse")
-library("data.table")
-library("glue")
-library("devtools")
+# packages
+suppressPackageStartupMessages({
+  library("Seurat")
+  library("Signac")
+  library("tidyverse")
+  library("data.table")
+  library("glue")
+  library("devtools")
+})
 
 # path to result folder
 result_path = "../results/Seurat/"
@@ -305,6 +308,9 @@ predscore_hist
     
 high_preds = g4_preds_meta %>% filter(prediction_score >= 0.75)
 high_preds_cellids = high_preds %>% pull(cell_id)
+high_preds_mol = high_preds %>% filter(cell_type == "MOL") %>% 
+  mutate(barcode = str_split(cell_id, "_")[[1]][2])
+write_tsv(high_preds_mol, "../results/Seurat/callpeaks_GFPsorted/high_pred_MOL.tsv")
 
 int_meta = int@meta.data
 comb_meta2 = inner_join(int_meta, g4_preds_meta, by = "cell_id") 
