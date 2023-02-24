@@ -13,7 +13,7 @@ suppressPackageStartupMessages({
 })
 
 # get unique peaks by wigglescout
-get_unique_ws = function(bw = ,
+get_unique_ws = function(bw,
                          bw_backgr,
                          subset,
                          thr = 4) {
@@ -62,6 +62,23 @@ cl1 = get_unique_ws(bw = "../results/Seurat/callpeaks_mESC-MEF/cluster_bigwigs/1
 cl0 = get_unique_ws(bw = "../results/Seurat/callpeaks_mESC-MEF/cluster_bigwigs/0_res0.1.bigwig", 
                     bw_backgr = "../results/Seurat/callpeaks_mESC-MEF/cluster_bigwigs/1_res0.1.bigwig",
                     subset = peaks)
+
+# highly predicted MOL cells
+peaks = fread("../results/Seurat/callpeaks_GFPsorted/high_pred_MOL_peaks.bed")
+peaks = GRanges(
+  seqnames = peaks$V1,
+  ranges = IRanges(
+    start = peaks$V2,
+    end = peaks$V3
+  )
+)
+
+mol = get_unique_ws(bw = "../results/Seurat/callpeaks_GFPsorted/high_pred_MOL.bw", 
+                    bw_backgr = "../results/Seurat/callpeaks_unsorted/cluster_bigwigs/1_res0.1_brain_cells.bw",
+                    subset = peaks)
+
+mol_prom = mol %>% dplyr::filter(abs(distanceToTSS) < 3000)
+
 
 
 
