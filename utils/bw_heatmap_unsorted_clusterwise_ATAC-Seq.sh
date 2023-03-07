@@ -1,9 +1,9 @@
 #!/bin/bash -l
-#SBATCH -A snic2020-15-9
+#SBATCH -A naiss2023-22-84
 #SBATCH -p core
 #SBATCH -n 4
 #SBATCH -t 12:00:00
-#SBATCH -M snowy
+#SBATCH -M rackham
 #SBATCH -J deeptools
 
 module load bioinfo-tools
@@ -19,8 +19,6 @@ computeMatrix reference-point -o ../results/deeptools/matrix_unsorted_clusterwis
  ../results/Seurat/callpeaks_unsorted/peak_sets/2_peaks.bed \
  ../results/Seurat/callpeaks_unsorted/peak_sets/3_peaks.bed \
  ../results/Seurat/callpeaks_unsorted/peak_sets/4_peaks.bed \
- ../results/Seurat/callpeaks_unsorted/peak_sets/5_peaks.bed \
- ../results/Seurat/callpeaks_unsorted/peak_sets/6_peaks.bed \
  --referencePoint center \
  -b 3000 -a 3000 --samplesLabel "mESC ATAC-Seq" --skipZeros --missingDataAsZero
  
@@ -33,7 +31,7 @@ plotHeatmap -m ../results/deeptools/matrix_unsorted_clusterwise_ATAC.mat.gz \
  --yMin 0 \
  --yMax 100 \
  --zMax 100 \
- -z "0" "1" "2" "3" "4" "5" "6" \
+ -z "0" "1" "2" "3" "4" \
  --yAxisLabel "" \
  --xAxisLabel "" \
 
@@ -47,6 +45,6 @@ plotHeatmap -m ../results/deeptools/matrix_unsorted_clusterwise_ATAC.mat.gz \
  --yMin 0 \
  --yMax 100 \
  --zMax 100 \
- -z "0" "1" "2" "3" "4" "5" "6" \
+ -z "0" "1" "2" "3" "4" \
  --yAxisLabel "" \
  --xAxisLabel "" \

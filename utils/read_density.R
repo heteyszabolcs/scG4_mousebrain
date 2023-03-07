@@ -13,6 +13,9 @@ suppressPackageStartupMessages({
 
 set.seed(42)
 
+# helper function
+source("C:/Szabolcs/Karolinska/Data/scripts/annotation.R")
+
 # result / peak folder
 result_folder = "../results/Seurat/callpeaks_unsorted/"
 bigwig_folder = "../results/Seurat/callpeaks_unsorted/cluster_bigwigs/"
@@ -35,8 +38,7 @@ mat = read_cov %>% dplyr::select(starts_with("X")) %>% dplyr::select(
   "2" = X2,
   "3" = X3,
   "4" = X4,
-  "5" = X5,
-  "6" = X6
+  "5" = X5
 )
 mat = as.matrix(mat)
 
@@ -63,8 +65,7 @@ colnames(mat_log) = c(
   "2",
   "3",
   "4",
-  "5",
-  "6"
+  "5"
 )
 
 pdf(
@@ -108,9 +109,9 @@ print(unique_hm)
 dev.off()
 
 tibble = as_tibble(mat_log)
-tibble = tibble %>% mutate(max = pmax(rownames(tibble)), type = colnames(tibble)[max.col(tibble[, 1:7])])
+tibble = tibble %>% mutate(max = pmax(rownames(tibble)), type = colnames(tibble)[max.col(tibble[, 1:6])])
 mat_grubbs = as_tibble(mat_grubbs)
-mat_grubbs_max = mat_grubbs %>% mutate(max = pmax(rownames(mat_grubbs)), type = colnames(mat_grubbs)[max.col(mat_grubbs[, 1:7])]) %>%
+mat_grubbs_max = mat_grubbs %>% mutate(max = pmax(rownames(mat_grubbs)), type = colnames(mat_grubbs)[max.col(mat_grubbs[, 1:6])]) %>%
   mutate(
     seqnames = read_cov_grubbs$seqnames,
     start = read_cov_grubbs$start,
@@ -159,10 +160,13 @@ ggsave(
   device = "pdf"
 )
 
+# annotation
+read_cov_grubbs_annot = mm10_annotation(regions = bed_grubbs, seqname_col = "seqnames", start_col = "start", end_col = "end", feature_1 = NULL, feature_2 = NULL)
+
 # if HOMER annotation is available
-read_cov_grubbs_annot = "../results/Seurat/callpeaks_unsorted/Grubbs_test-unique_G4_peaks_0.001_annot.tsv"
-read_cov_grubbs_annot = fread(read_cov_grubbs_annot)
-read_cov_grubbs_annot = read_cov_grubbs_annot %>% mutate(rowid = paste0(Chr, "_", End))
+#read_cov_grubbs_annot = "../results/Seurat/callpeaks_unsorted/Grubbs_test-unique_G4_peaks_0.001_annot.tsv"
+#read_cov_grubbs_annot = fread(read_cov_grubbs_annot)
+read_cov_grubbs_annot = read_cov_grubbs_annot %>% mutate(rowid = paste0(seqnames, "_", end))
 
 read_cov_grubbs_annot = read_cov_grubbs %>% mutate(rowid = paste0(seqnames, "_", end)) %>% 
   inner_join(., read_cov_grubbs_annot, by = c("rowid" = "rowid")) %>%
@@ -173,62 +177,18 @@ read_cov_grubbs_annot = read_cov_grubbs %>% mutate(rowid = paste0(seqnames, "_",
     "cluster 3" = X3,
     "cluster 4" = X4,
     "cluster 5" = X5,
-    "cluster 6" = X6,
-    `Distance to TSS`,
-    `Gene Name`,
+    distanceToTSS,
+    "gene" = SYMBOL,
     rowid
   ) 
 
-# get example (promoter of Tcn2 gene)
-tcn2 = read_cov_grubbs_annot %>% dplyr::filter(`Gene Name` == "Tcn2") %>% 
-  pivot_longer("cluster 0":"cluster 6") %>% 
-  dplyr::select(read_density = value, Seurat_cluster = name, gene = `Gene Name`)
-tcn2 = tcn2 %>%
-  ggplot(data = ., aes(
-    x = reorder(Seurat_cluster, -read_density),
-    y = read_density,
-    fill = Seurat_cluster
-  )) +
-  geom_bar(stat = "identity",
-           width = 0.5,
-           color = "black") +
-  scale_fill_brewer(palette = "Reds") +
-  labs(title = "Tcn2",
-       x = "Seurat cluster",
-       y = "read density",
-       fill = "") +
-  guides(fill = "none") + 
-  theme_classic() +
-  theme(
-    text = element_text(size = 20),
-    plot.title = element_text(size = 15),
-    axis.text.x = element_text(size = 13, color = "black")
-  )
-tcn2
-
-ggsave(
-  glue("{result_folder}Grubbs_test-cluster6_example_Tcn2.png"),
-  plot = tcn2,
-  width = 6,
-  height = 3,
-  dpi = 300,
-)
-
-ggsave(
-  glue("{result_folder}Grubbs_test-cluster6_example_Tcn2.pdf"),
-  plot = tcn2,
-  width = 6,
-  height = 3,
-  device = "pdf"
-)
-
-cluster6 = mat_grubbs_max %>% 
+cluster2 = mat_grubbs_max %>% 
   inner_join(., read_cov_grubbs_annot, by = c("rowid" = "rowid")) %>%
-  dplyr::filter(unique == "6") %>%
+  dplyr::filter(unique == "2") %>%
   dplyr::select(Chr = "seqnames", Start = "start", End = "end")
 
-write_tsv(cluster6,
-          glue("{result_folder}Grubbs_test-unique_G4_cluster6.bed"),
+write_tsv(cluster2,
+          glue("{result_folder}Grubbs_test-unique_G4_cluster2.bed"),
           col_names = FALSE)
 
 # inner join with annotation - be careful, here some genes will be omitted as they have not been annotated
@@ -240,10 +200,9 @@ mat_grubbs_max = mat_grubbs_max %>% inner_join(., read_cov_grubbs_annot, by = c(
     "cluster 3",
     "cluster 4",
     "cluster 5",
-    "cluster 6",
     unique,
-    `Distance to TSS`,
-    `Gene Name`
+    distanceToTSS,
+    gene
   )
 
 write_tsv(
@@ -260,7 +219,7 @@ scrna = readRDS(scrna)
 norm = scrna[["RNA"]]@data
 
 existing_gene_symbols = character()
-for (gene in read_cov_grubbs_annot$`Gene Name`) {
+for (gene in read_cov_grubbs_annot$gene) {
   if (gene %in% norm@Dimnames[[1]]) {
     existing_gene_symbols = c(existing_gene_symbols, gene)
   }
@@ -282,7 +241,7 @@ ms = bind_rows(ms)
 ms = ms %>% distinct_all(., .keep_all = TRUE)
 ms = ms %>% pivot_wider(., names_from = "Seurat_cluster", values_from = "means")
 
-ms = ms %>% inner_join(., read_cov_grubbs_annot, by = c("gene_symbol" = "Gene Name"))
+ms = ms %>% inner_join(., read_cov_grubbs_annot, by = c("gene_symbol" = "gene"))
 rows = ms$gene_symbol
 ms = ms %>% dplyr::select("0":"15")
 ms = as.matrix(ms)
@@ -315,7 +274,7 @@ bartosovic_hm = Heatmap(
   show_row_dend = FALSE,
   heatmap_width = unit(6, "cm"),
   heatmap_height = unit(12, "cm"),
-  row_names_gp = gpar(fontsize = 2),
+  row_names_gp = gpar(fontsize = 6),
   column_names_gp = gpar(fontsize = 6),
   column_names_rot = 0
 )
@@ -326,7 +285,7 @@ pdf(
   file = glue(
     "{result_folder}heatmap_uniqueMACS2_peaks-scRNA_GSE163484-85.pdf"
   ),
-  width = 5,
+  width = 7,
   height = 5,
 )
 print(bartosovic_hm)
@@ -408,11 +367,24 @@ dev.off()
 # integrate with scRNA-Seq data
 # GSE75330 (Marques et al.)
 marques = readRDS(marques_scrna)
+new_ids = as.character(marques@meta.data$cell_class)
+new_ids[new_ids == 'NFOL2'] = 'NFOL'
+new_ids[new_ids == 'NFOL1'] = 'NFOL'
+new_ids[new_ids == 'MFOL2'] = 'MFOL'
+new_ids[new_ids == 'MFOL1'] = 'MFOL'
+new_ids[new_ids == 'MOL1'] = 'MOL'
+new_ids[new_ids == 'MOL2'] = 'MOL'
+new_ids[new_ids == 'MOL3'] = 'MOL'
+new_ids[new_ids == 'MOL4'] = 'MOL'
+new_ids[new_ids == 'MOL5'] = 'MOL'
+new_ids[new_ids == 'MOL6'] = 'MOL'
+new_ids[new_ids == 'PPR'] = 'VLMC'
+marques@meta.data$merged_cell_class = new_ids
 # log normalized expression matrix
 norm = marques[["RNA"]]@data
 
 existing_gene_symbols = character()
-for (gene in read_cov_grubbs_annot$`Gene Name`) {
+for (gene in read_cov_grubbs_annot$gene) {
   if (gene %in% norm@Dimnames[[1]]) {
     existing_gene_symbols = c(existing_gene_symbols, gene)
   }
@@ -420,9 +392,9 @@ for (gene in read_cov_grubbs_annot$`Gene Name`) {
 
 # heatmap
 ms = list()
-for (cluster in levels(unique(Idents(marques)))) {
+for (cluster in unique(marques@meta.data$merged_cell_class)) {
   m = t(as.matrix(norm[existing_gene_symbols, ]))
-  cluster_barcodes = WhichCells(marques, idents = cluster)
+  cluster_barcodes = rownames(marques@meta.data[which(marques@meta.data$merged_cell_class == cluster),])
   m = m[cluster_barcodes, ]
   t = tibble(means = colMeans(m))
   t = t %>%
@@ -431,12 +403,12 @@ for (cluster in levels(unique(Idents(marques)))) {
   ms[[as.character(cluster)]] = t
 }
 ms = bind_rows(ms)
-ms = ms %>% distinct_all(., .keep_all = TRUE)
+ms = ms %>% distinct_all(., .keep_all = TRUE) 
 ms = ms %>% pivot_wider(., names_from = "Seurat_cluster", values_from = "means")
 
-ms = ms %>% inner_join(., read_cov_grubbs_annot, by = c("gene_symbol" = "Gene Name"))
+ms = ms %>% inner_join(., read_cov_grubbs_annot, by = c("gene_symbol" = "gene"))
 rows = ms$gene_symbol
-ms = ms %>% dplyr::select("MOL":"VLMC")
+ms = ms %>% dplyr::select("COP":"VLMC")
 ms = as.matrix(ms)
 rownames(ms) = rows
 
@@ -469,8 +441,8 @@ marques_hm = Heatmap(
   # heatmap_height = unit(12, "cm"),
   width = unit(2, "cm"),
   height = unit(14, "cm"),
-  row_names_gp = gpar(fontsize = 1.7),
-  column_names_gp = gpar(fontsize = 6),
+  row_names_gp = gpar(fontsize = 6),
+  column_names_gp = gpar(fontsize = 7),
   column_names_rot = 90
 )
 marques_hm
@@ -480,7 +452,7 @@ pdf(
   file = glue(
     "{result_folder}heatmap_uniqueMACS2_peaks-scRNA_GSE75330.pdf"
   ),
-  width = 4.5,
+  width = 6,
   height = 7,
 )
 print(marques_hm)
@@ -488,10 +460,10 @@ dev.off()
 
 
 # Marques et al. expressions near TSS
-read_cov_grubbs_tss = read_cov_grubbs_annot %>% dplyr::filter(abs(`Distance to TSS`) < 3000)
+read_cov_grubbs_tss = read_cov_grubbs_annot %>% dplyr::filter(abs(distanceToTSS) < 3000)
 
 existing_gene_symbols = character()
-for (gene in read_cov_grubbs_tss$`Gene Name`) {
+for (gene in read_cov_grubbs_tss$gene) {
   if (gene %in% norm@Dimnames[[1]]) {
     existing_gene_symbols = c(existing_gene_symbols, gene)
   }
@@ -499,9 +471,9 @@ for (gene in read_cov_grubbs_tss$`Gene Name`) {
 
 # heatmap
 ms = list()
-for (cluster in levels(unique(Idents(marques)))) {
+for (cluster in unique(marques@meta.data$merged_cell_class)) {
   m = t(as.matrix(norm[existing_gene_symbols, ]))
-  cluster_barcodes = WhichCells(marques, idents = cluster)
+  cluster_barcodes = rownames(marques@meta.data[which(marques@meta.data$merged_cell_class == cluster),])
   m = m[cluster_barcodes, ]
   t = tibble(means = colMeans(m))
   t = t %>%
@@ -513,7 +485,7 @@ ms = bind_rows(ms)
 ms = ms %>% distinct_all(., .keep_all = TRUE)
 ms = ms %>% pivot_wider(., names_from = "Seurat_cluster", values_from = "means")
 
-ms = ms %>% inner_join(., read_cov_grubbs_annot, by = c("gene_symbol" = "Gene Name"))
+ms = ms %>% inner_join(., read_cov_grubbs_annot, by = c("gene_symbol" = "gene"))
 rows = ms$gene_symbol
 ms = ms %>% dplyr::select("MOL":"VLMC")
 ms = as.matrix(ms)
@@ -546,9 +518,9 @@ marques_proms_hm = Heatmap(
   show_row_dend = FALSE,
   # heatmap_width = unit(12, "cm"),
   # heatmap_height = unit(12, "cm"),
-  width = unit(8, "cm"),
-  height = unit(19, "cm"),
-  row_names_gp = gpar(fontsize = 3.5),
+  width = unit(2, "cm"),
+  height = unit(17, "cm"),
+  row_names_gp = gpar(fontsize = 9),
   column_names_gp = gpar(fontsize = 12),
   column_names_rot = 90
 )
@@ -576,9 +548,9 @@ for (gene in markers$V1) {
 
 # heatmap
 hm_markers = list()
-for (cluster in levels(unique(Idents(marques)))) {
+for (cluster in unique(marques@meta.data$merged_cell_class)) {
   m = t(as.matrix(norm[existing_gene_symbols, ]))
-  cluster_barcodes = WhichCells(marques, idents = cluster)
+  cluster_barcodes = rownames(marques@meta.data[which(marques@meta.data$merged_cell_class == cluster),])
   m = m[cluster_barcodes, ]
   t = tibble(means = colMeans(m))
   t = t %>%
@@ -591,7 +563,7 @@ hm_markers = hm_markers %>% distinct_all(., .keep_all = TRUE)
 hm_markers = hm_markers %>% pivot_wider(., names_from = "Seurat_cluster", values_from = "means")
 
 rows = hm_markers$gene_symbol
-hm_markers = hm_markers %>% select(levels(unique(Idents(marques))))
+hm_markers = hm_markers %>% dplyr::select(unique(marques@meta.data$merged_cell_class))
 hm_markers = as.matrix(hm_markers)
 rownames(hm_markers) = rows
 
@@ -640,7 +612,7 @@ dev.off()
 # integrate with scRNA-Seq data
 # GSE75330 (Marques et al.)
 existing_gene_symbols = character()
-for (gene in read_cov_grubbs_annot$`Gene Name`) {
+for (gene in read_cov_grubbs_annot$gene) {
   if (gene %in% norm@Dimnames[[1]]) {
     existing_gene_symbols = c(existing_gene_symbols, gene)
   }
@@ -648,9 +620,9 @@ for (gene in read_cov_grubbs_annot$`Gene Name`) {
 
 # heatmap
 ms = list()
-for (cluster in levels(unique(Idents(marques)))) {
+for (cluster in unique(marques@meta.data$merged_cell_class)) {
   m = t(as.matrix(norm[existing_gene_symbols, ]))
-  cluster_barcodes = WhichCells(marques, idents = cluster)
+  cluster_barcodes = rownames(marques@meta.data[which(marques@meta.data$merged_cell_class == cluster),])
   m = m[cluster_barcodes, ]
   t = tibble(means = colMeans(m))
   t = t %>%
@@ -662,10 +634,10 @@ ms = bind_rows(ms)
 ms = ms %>% distinct_all(., .keep_all = TRUE)
 ms = ms %>% pivot_wider(., names_from = "Seurat_cluster", values_from = "means")
 
-ms = ms %>% inner_join(., read_cov_grubbs_annot, by = c("gene_symbol" = "Gene Name")) %>% 
+ms = ms %>% inner_join(., read_cov_grubbs_annot, by = c("gene_symbol" = "gene")) %>% 
   distinct(gene_symbol, .keep_all = TRUE)
 rows = ms$gene_symbol
-ms = ms %>% select(levels(unique(Idents(marques))))
+ms = ms %>% dplyr::select(unique(marques@meta.data$merged_cell_class))
 ms = as.matrix(ms)
 rownames(ms) = rows
 
@@ -696,7 +668,7 @@ unique_marques_hm = Heatmap(
   show_row_dend = FALSE,
   width = unit(1.5, "cm"),
   height = unit(16, "cm"),
-  row_names_gp = gpar(fontsize = 2.5),
+  row_names_gp = gpar(fontsize = 6),
   column_names_gp = gpar(fontsize = 6),
   column_names_rot = 90
 )
@@ -711,39 +683,6 @@ pdf(
   height = 7.5
 )
 print(unique_marques_hm)
-dev.off()
-
-unique_marques_hm2 = Heatmap(
-  ms,
-  # column_title = "scRNA-Seq (Marques et al.) Seurat clusters",
-  row_title = "unique G4 location",
-  name = "norm. expr.",
-  row_km = 3,
-  column_km = 1,
-  show_row_names = FALSE,
-  #clustering_method_rows = "complete",
-  col = col_fun,
-  # rect_gp = gpar(col = "black", lwd = 0.2),
-  show_column_dend = TRUE,
-  cluster_columns = FALSE,
-  cluster_rows = TRUE,
-  show_row_dend = FALSE,
-  width = unit(1.5, "cm"),
-  height = unit(12, "cm"),
-  row_names_gp = gpar(fontsize = 2.5),
-  column_names_gp = gpar(fontsize = 6),
-  column_names_rot = 90
-)
-unique_marques_hm2
-
-pdf(
-  file = glue(
-    "{result_folder}heatmap_uniqueMACS2_peaks-scRNA_GSE75330_2.pdf"
-  ),
-  width = 4,
-  height = 6
-)
-print(unique_marques_hm2)
 dev.off()
 
 # heatmaps for G4 Seurat clusters indicating Marques et al. expression levels
@@ -810,20 +749,20 @@ dev.off()
 # )
 # dev.off()
 
-# cluster 3
-cluster3_unique = mat_grubbs_max %>% filter(unique == "3") %>% pull("Gene Name")
+# cluster 2
+cluster2_unique = mat_grubbs_max %>% filter(unique == "2") %>% pull("gene")
 
 existing_gene_symbols = character()
-for (gene in cluster3_unique) {
+for (gene in cluster2_unique) {
   if (gene %in% norm@Dimnames[[1]]) {
     existing_gene_symbols = c(existing_gene_symbols, gene)
   }
 }
 
 ms = list()
-for (cluster in levels(unique(Idents(marques)))) {
+for (cluster in unique(marques@meta.data$merged_cell_class)) {
   m = t(as.matrix(norm[existing_gene_symbols, ]))
-  cluster_barcodes = WhichCells(marques, idents = cluster)
+  cluster_barcodes = rownames(marques@meta.data[which(marques@meta.data$merged_cell_class == cluster),])
   m = m[cluster_barcodes, ]
   t = tibble(means = colMeans(m))
   t = t %>%
@@ -836,10 +775,87 @@ ms = bind_rows(ms)
 ms = ms %>% distinct_all(., .keep_all = TRUE)
 ms = ms %>% pivot_wider(., names_from = "Seurat_cluster", values_from = "means")
 
-ms = ms %>% inner_join(., read_cov_grubbs_annot, by = c("gene_symbol" = "Gene Name")) %>% 
+ms = ms %>% inner_join(., read_cov_grubbs_annot, by = c("gene_symbol" = "gene")) %>% 
   distinct(gene_symbol, .keep_all = TRUE)
 rows = ms$gene_symbol
-ms = ms %>% select(levels(unique(Idents(marques))))
+ms = ms %>% dplyr::select(unique(marques@meta.data$merged_cell_class))
+ms = as.matrix(ms)
+rownames(ms) = rows
+
+png(
+  file = glue(
+    "{result_folder}heatmap_uniqueMACS2_cl2-scRNA_GSE75330.png"
+  ),
+  width = 15,
+  height = 15,
+  units = 'cm',
+  res = 500
+)
+col_fun = colorRamp2(c(0, 0.5, 1), c("#9ecae1", "white", "#fc9272"))
+cl_2_hm = Heatmap(
+  ms,
+  column_title = "scRNA-Seq (Marques et al.) Seurat clusters",
+  row_title = "unique G4 location - cluster 2",
+  name = "norm. expr.",
+  row_km = 2,
+  #column_km = 1,
+  #clustering_method_rows = "complete",
+  col = col_fun,
+  rect_gp = gpar(col = "black", lwd = 0.2),
+  #top_annotation = ha,
+  show_column_dend = TRUE,
+  cluster_columns = FALSE,
+  cluster_rows = TRUE,
+  show_row_dend = FALSE,
+  width = unit(3, "cm"),
+  height = unit(8, "cm"),
+  row_names_gp = gpar(fontsize = 8),
+  column_names_gp = gpar(fontsize = 8),
+  column_names_rot = 90
+)
+cl_2_hm
+dev.off()
+
+pdf(
+  file = glue(
+    "{result_folder}heatmap_uniqueMACS2_cl2-scRNA_GSE75330.pdf"
+  ),
+  width = 5.5,
+  height = 5,
+)
+print(cl_2_hm)
+dev.off()
+
+# cluster 3
+cluster3_unique = mat_grubbs_max %>% filter(unique == "3") %>% pull("gene")
+
+existing_gene_symbols = character()
+for (gene in cluster3_unique) {
+  if (gene %in% norm@Dimnames[[1]]) {
+    existing_gene_symbols = c(existing_gene_symbols, gene)
+  }
+}
+
+ms = list()
+for (cluster in unique(marques@meta.data$merged_cell_class)) {
+  m = t(as.matrix(norm[existing_gene_symbols, ]))
+  cluster_barcodes = rownames(marques@meta.data[which(marques@meta.data$merged_cell_class == cluster),])
+  m = m[cluster_barcodes, ]
+  t = tibble(means = colMeans(m))
+  t = t %>%
+    mutate(gene_symbol = existing_gene_symbols) %>%
+    mutate(Seurat_cluster = as.character(cluster))
+  ms[[as.character(cluster)]] = t
+}
+
+ms = bind_rows(ms)
+ms = ms %>% distinct_all(., .keep_all = TRUE)
+ms = ms %>% pivot_wider(., names_from = "Seurat_cluster", values_from = "means")
+
+ms = ms %>% inner_join(., read_cov_grubbs_annot, by = c("gene_symbol" = "gene")) %>% 
+  distinct(gene_symbol, .keep_all = TRUE)
+rows = ms$gene_symbol
+ms = ms %>% dplyr::select(unique(marques@meta.data$merged_cell_class))
 ms = as.matrix(ms)
 rownames(ms) = rows
 
@@ -887,150 +903,20 @@ pdf(
 print(cl_3_hm)
 dev.off()
 
-# cluster 4
-cluster4_unique = mat_grubbs_max %>% filter(unique == "4") %>% pull("Gene Name")
-
-existing_gene_symbols = character()
-for (gene in cluster4_unique) {
-  if (gene %in% norm@Dimnames[[1]]) {
-    existing_gene_symbols = c(existing_gene_symbols, gene)
-  }
-}
-
-ms = list()
-for (cluster in levels(unique(Idents(marques)))) {
-  m = t(as.matrix(norm[existing_gene_symbols, ]))
-  cluster_barcodes = WhichCells(marques, idents = cluster)
-  m = m[cluster_barcodes, ]
-  t = tibble(means = colMeans(m))
-  t = t %>%
-    mutate(gene_symbol = existing_gene_symbols) %>%
-    mutate(Seurat_cluster = as.character(cluster))
-  ms[[as.character(cluster)]] = t
-}
-
-ms = bind_rows(ms)
-ms = ms %>% distinct_all(., .keep_all = TRUE)
-ms = ms %>% pivot_wider(., names_from = "Seurat_cluster", values_from = "means")
-
-ms = ms %>% inner_join(., read_cov_grubbs_annot, by = c("gene_symbol" = "Gene Name")) %>% 
-  distinct(gene_symbol, .keep_all = TRUE)
-rows = ms$gene_symbol
-ms = ms %>% select(levels(unique(Idents(marques))))
-ms = as.matrix(ms)
-rownames(ms) = rows
-
-png(
-  file = glue(
-    "{result_folder}heatmap_uniqueMACS2_cl4-scRNA_GSE75330.png"
-  ),
-  width = 15,
-  height = 15,
-  units = 'cm',
-  res = 500
-)
-col_fun = colorRamp2(c(0, 0.5, 1), c("#9ecae1", "white", "#fc9272"))
-cl_4_hm = Heatmap(
-  ms,
-  column_title = "scRNA-Seq (Marques et al.) Seurat clusters",
-  row_title = "unique G4 location - cluster 4",
-  name = "norm. expr.",
-  row_km = 1,
-  #column_km = 2,
-  #clustering_method_rows = "complete",
-  col = col_fun,
-  rect_gp = gpar(col = "black", lwd = 0.2),
-  #top_annotation = ha,
-  show_column_dend = TRUE,
-  cluster_columns = FALSE,
-  cluster_rows = TRUE,
-  show_row_dend = FALSE,
-  width = unit(3, "cm"),
-  height = unit(8, "cm"),
-  row_names_gp = gpar(fontsize = 8),
-  column_names_gp = gpar(fontsize = 6),
-  column_names_rot = 90
-)
-cl_4_hm
-dev.off()
-
 # cluster 1
-# cluster1_unique = mat_grubbs_max %>% filter(unique == "cluster_1") %>% pull("Gene Name")
-#
-# existing_gene_symbols = character()
-# for (gene in cluster1_unique) {
-#   if (gene %in% norm@Dimnames[[1]]) {
-#     existing_gene_symbols = c(existing_gene_symbols, gene)
-#   }
-# }
-#
-# ms = list()
-# for (cluster in levels(unique(Idents(marques)))) {
-#   m = t(as.matrix(norm[existing_gene_symbols,]))
-#   cluster_barcodes = WhichCells(marques, idents = cluster)
-#   m = m[cluster_barcodes,]
-#   t = tibble(means = colMeans(m))
-#   t = t %>%
-#     mutate(gene_symbol = existing_gene_symbols) %>%
-#     mutate(Seurat_cluster = as.character(cluster))
-#   ms[[as.character(cluster)]] = t
-# }
-#
-# ms = bind_rows(ms)
-# ms = ms %>% distinct_all(., .keep_all = TRUE)
-# ms = ms %>% pivot_wider(., names_from = "Seurat_cluster", values_from = "means")
-#
-# ms = ms %>% inner_join(., read_cov_grubbs, by = c("gene_symbol" = "Gene Name"))
-# rows = ms$gene_symbol
-# ms = ms %>% select(levels(unique(Idents(marques))))
-# ms = as.matrix(ms)
-# rownames(ms) = rows
-#
-# png(
-#   file = glue("{result_folder}heatmap_uniqueMACS2_cl1-scRNA_GSE75330.png"),
-#   width = 15,
-#   height = 15,
-#   units = 'cm',
-#   res = 500
-# )
-# col_fun = colorRamp2(c(0, 0.5, 1), c("#9ecae1", "white", "#fc9272"))
-# Heatmap(
-#   ms,
-#   column_title = "scRNA-Seq (Marques et al.) Seurat clusters",
-#   row_title = "unique G4 location - cluster 1",
-#   name = "norm. expr.",
-#   row_km = 3,
-#   #column_km = 2,
-#   #clustering_method_rows = "complete",
-#   col = col_fun,
-#   rect_gp = gpar(col = "black", lwd = 0.2),
-#   #top_annotation = ha,
-#   show_column_dend = TRUE,
-#   cluster_columns = FALSE,
-#   cluster_rows = TRUE,
-#   show_row_dend = FALSE,
-#   width = unit(1.5, "cm"),
-#   height = unit(10, "cm"),
-#   row_names_gp = gpar(fontsize = 8),
-#   column_names_gp = gpar(fontsize = 6),
-#   column_names_rot = 90
-# )
-# dev.off()
-
-# cluster 0
-cluster0_unique = mat_grubbs_max %>% filter(unique == "0") %>% pull("Gene Name")
+cluster1_unique = mat_grubbs_max %>% filter(unique == "1") %>% pull("gene")
 
 existing_gene_symbols = character()
-for (gene in cluster0_unique) {
+for (gene in cluster1_unique) {
   if (gene %in% norm@Dimnames[[1]]) {
     existing_gene_symbols = c(existing_gene_symbols, gene)
   }
 }
 
 ms = list()
-for (cluster in levels(unique(Idents(marques)))) {
+for (cluster in unique(marques@meta.data$merged_cell_class)) {
   m = t(as.matrix(norm[existing_gene_symbols, ]))
-  cluster_barcodes = WhichCells(marques, idents = cluster)
+  cluster_barcodes = rownames(marques@meta.data[which(marques@meta.data$merged_cell_class == cluster),])
   m = m[cluster_barcodes, ]
   t = tibble(means = colMeans(m))
   t = t %>%
@@ -1043,16 +929,16 @@ ms = bind_rows(ms)
 ms = ms %>% distinct_all(., .keep_all = TRUE)
 ms = ms %>% pivot_wider(., names_from = "Seurat_cluster", values_from = "means")
 
-ms = ms %>% inner_join(., read_cov_grubbs_annot, by = c("gene_symbol" = "Gene Name")) %>% 
+ms = ms %>% inner_join(., read_cov_grubbs_annot, by = c("gene_symbol" = "gene")) %>% 
   distinct(gene_symbol, .keep_all = TRUE)
 rows = ms$gene_symbol
-ms = ms %>% select(levels(unique(Idents(marques))))
+ms = ms %>% dplyr::select(unique(marques@meta.data$merged_cell_class))
 ms = as.matrix(ms)
 rownames(ms) = rows
 
 png(
   file = glue(
-    "{result_folder}heatmap_uniqueMACS2_cl0-scRNA_GSE75330.png"
+    "{result_folder}heatmap_uniqueMACS2_cl1-scRNA_GSE75330.png"
   ),
   width = 15,
   height = 15,
@@ -1060,13 +946,13 @@ png(
   res = 500
 )
 col_fun = colorRamp2(c(0, 0.5, 1), c("#9ecae1", "white", "#fc9272"))
-cl_0_hm = Heatmap(
+cl_1_hm = Heatmap(
   ms,
   column_title = "scRNA-Seq (Marques et al.) Seurat clusters",
-  row_title = "unique G4 location - cluster 0",
+  row_title = "unique G4 location - cluster 1",
   name = "norm. expr.",
   row_km = 1,
-  #column_km = 2,
+  #column_km = 1,
   #clustering_method_rows = "complete",
   col = col_fun,
   rect_gp = gpar(col = "black", lwd = 0.2),
@@ -1078,195 +964,18 @@ cl_0_hm = Heatmap(
   width = unit(3, "cm"),
   height = unit(8, "cm"),
   row_names_gp = gpar(fontsize = 8),
-  column_names_gp = gpar(fontsize = 6),
+  column_names_gp = gpar(fontsize = 8),
   column_names_rot = 90
 )
-cl_0_hm
-dev.off()
-
-# cluster 5
-cluster5_unique = mat_grubbs_max %>% filter(unique == "5") %>% pull("Gene Name")
-
-existing_gene_symbols = character()
-for (gene in cluster5_unique) {
-  if (gene %in% norm@Dimnames[[1]]) {
-    existing_gene_symbols = c(existing_gene_symbols, gene)
-  }
-}
-
-ms = list()
-for (cluster in levels(unique(Idents(marques)))) {
-  m = t(as.matrix(norm[existing_gene_symbols, ]))
-  cluster_barcodes = WhichCells(marques, idents = cluster)
-  m = m[cluster_barcodes, ]
-  t = tibble(means = colMeans(m))
-  t = t %>%
-    mutate(gene_symbol = existing_gene_symbols) %>%
-    mutate(Seurat_cluster = as.character(cluster))
-  ms[[as.character(cluster)]] = t
-}
-
-ms = bind_rows(ms)
-ms = ms %>% distinct_all(., .keep_all = TRUE)
-ms = ms %>% pivot_wider(., names_from = "Seurat_cluster", values_from = "means")
-
-ms = ms %>% inner_join(., read_cov_grubbs_annot, by = c("gene_symbol" = "Gene Name")) %>%
-  distinct(gene_symbol, .keep_all = TRUE)
-rows = ms$gene_symbol
-ms = ms %>% select(levels(unique(Idents(marques))))
-ms = as.matrix(ms)
-rownames(ms) = rows
-
-png(
-  file = glue(
-    "{result_folder}heatmap_uniqueMACS2_cl5-scRNA_GSE75330.png"
-  ),
-  width = 15,
-  height = 15,
-  units = 'cm',
-  res = 500
-)
-col_fun = colorRamp2(c(0, 0.5, 1), c("#9ecae1", "white", "#fc9272"))
-cl_5_hm = Heatmap(
-  ms,
-  column_title = "scRNA-Seq (Marques et al.) Seurat clusters",
-  row_title = "unique G4 location - cluster 5",
-  name = "norm. expr.",
-  row_km = 4,
-  #column_km = 2,
-  #clustering_method_rows = "complete",
-  col = col_fun,
-  rect_gp = gpar(col = "black", lwd = 0.2),
-  #top_annotation = ha,
-  show_column_dend = TRUE,
-  cluster_columns = FALSE,
-  cluster_rows = TRUE,
-  show_row_dend = FALSE,
-  width = unit(1, "cm"),
-  height = unit(12, "cm"),
-  row_names_gp = gpar(fontsize = 2),
-  column_names_gp = gpar(fontsize = 5),
-  column_names_rot = 90
-)
-cl_5_hm
+cl_1_hm
 dev.off()
 
 pdf(
   file = glue(
-    "{result_folder}heatmap_uniqueMACS2_cl5-scRNA_GSE75330.pdf"
-  ),
-  width = 4.5,
-  height = 5.5,
-)
-print(cl_5_hm)
-dev.off()
-
-cl_5_hm2 = Heatmap(
-  ms,
-  column_title = "scRNA-Seq (Marques et al.) Seurat clusters",
-  row_title = "unique G4 location - cluster 5",
-  name = "norm. expr.",
-  row_km = 4,
-  #column_km = 2,
-  #clustering_method_rows = "complete",
-  col = col_fun,
-  #rect_gp = gpar(col = "black", lwd = 0.2),
-  #top_annotation = ha,
-  show_column_dend = TRUE,
-  show_row_names = FALSE,
-  cluster_columns = FALSE,
-  cluster_rows = TRUE,
-  show_row_dend = FALSE,
-  width = unit(1.5, "cm"),
-  height = unit(12, "cm"),
-  row_names_gp = gpar(fontsize = 2),
-  column_names_gp = gpar(fontsize = 5),
-  column_names_rot = 90
-)
-cl_5_hm2
-
-pdf(
-  file = glue(
-    "{result_folder}heatmap_uniqueMACS2_cl5-scRNA_GSE75330.pdf"
-  ),
-  width = 4.5,
-  height = 5.5,
-)
-print(cl_5_hm2)
-dev.off()
-
-
-# cluster 6
-cluster6_unique = mat_grubbs_max %>% filter(unique == "6") %>% pull("Gene Name")
-
-existing_gene_symbols = character()
-for (gene in cluster6_unique) {
-  if (gene %in% norm@Dimnames[[1]]) {
-    existing_gene_symbols = c(existing_gene_symbols, gene)
-  }
-}
-
-ms = list()
-for (cluster in levels(unique(Idents(marques)))) {
-  m = t(as.matrix(norm[existing_gene_symbols,]))
-  cluster_barcodes = WhichCells(marques, idents = cluster)
-  m = m[cluster_barcodes,]
-  t = tibble(means = colMeans(m))
-  t = t %>%
-    mutate(gene_symbol = existing_gene_symbols) %>%
-    mutate(Seurat_cluster = as.character(cluster))
-  ms[[as.character(cluster)]] = t
-}
-
-ms = bind_rows(ms)
-ms = ms %>% distinct_all(., .keep_all = TRUE)
-ms = ms %>% pivot_wider(., names_from = "Seurat_cluster", values_from = "means")
-
-ms = ms %>% inner_join(., read_cov_grubbs_annot, by = c("gene_symbol" = "Gene Name")) %>%
-  distinct(gene_symbol, .keep_all = TRUE)
-rows = ms$gene_symbol
-ms = ms %>% select(levels(unique(Idents(marques))))
-ms = as.matrix(ms)
-rownames(ms) = rows
-
-png(
-  file = glue("{result_folder}heatmap_uniqueMACS2_cl6-scRNA_GSE75330.png"),
-  width = 15,
-  height = 15,
-  units = 'cm',
-  res = 500
-)
-col_fun = colorRamp2(c(0, 3, 6), c("#9ecae1", "white", "#fc9272"))
-cl_6_hm = Heatmap(
-  ms,
-  column_title = "scRNA-Seq (Marques et al.) Seurat clusters",
-  row_title = "unique G4 location - cluster 6",
-  name = "norm. expr.",
-  row_km = 3,
-  #column_km = 2,
-  #clustering_method_rows = "complete",
-  col = col_fun,
-  rect_gp = gpar(col = "black", lwd = 0.2),
-  #top_annotation = ha,
-  show_column_dend = TRUE,
-  cluster_columns = FALSE,
-  cluster_rows = TRUE,
-  show_row_dend = FALSE,
-  width = unit(1, "cm"),
-  height = unit(12, "cm"),
-  row_names_gp = gpar(fontsize = 4),
-  column_names_gp = gpar(fontsize = 5),
-  column_names_rot = 90
-)
-cl_6_hm
-dev.off()
-
-pdf(
-  file = glue(
-    "{result_folder}heatmap_uniqueMACS2_cl6-scRNA_GSE75330.pdf"
+    "{result_folder}heatmap_uniqueMACS2_cl1-scRNA_GSE75330.pdf"
   ),
   width = 5.5,
-  height = 5.5,
+  height = 5,
 )
-print(cl_6_hm)
+print(cl_1_hm)
 dev.off()

@@ -67,6 +67,62 @@ g4_res0.1 = FindClusters(object = g4_res0.1,
                   resolution = 0.1,
                   algorithm = 3)
 
+# QC violin plots
+nF_violin = VlnPlot(g4_res0.1, group.by = "seurat_clusters", features = "nFeature_peaks", pt.size = 0.1) +
+  scale_fill_manual(values = c("#9ecae1", "#fc9272")) +
+  ggtitle("nFeature (peaks)") +
+  xlab("cluster") + 
+  ylim(0, 15000) +
+  theme(
+    text = element_text(size = 25),
+    plot.title = element_text(size = 20),
+    axis.text.x = element_text(size = 25, color = "black", angle = 0),
+    axis.text.y = element_text(size = 25, color = "black")
+  ) +
+  NoLegend()
+TSS_violin = VlnPlot(g4_res0.1, group.by = "seurat_clusters", features = "TSS_fragments", pt.size = 0.1) +
+  scale_fill_manual(values = c("#9ecae1", "#fc9272")) +
+  ggtitle("TSS fragments") +
+  xlab("cluster") + 
+  ylim(0, 15000) +
+  theme(
+    text = element_text(size = 25),
+    plot.title = element_text(size = 20),
+    axis.text.x = element_text(size = 25, color = "black", angle = 0),
+    axis.text.y = element_text(size = 25, color = "black")
+  ) +
+  NoLegend()
+mito_violin = VlnPlot(g4_res0.1, group.by = "seurat_clusters", features = "mitochondrial", pt.size = 0.1) +
+  scale_fill_manual(values = c("#9ecae1", "#fc9272")) +
+  ggtitle("mitochondrial fragments") +
+  xlab("cluster") + 
+  ylim(0, 15000) +
+  theme(
+    text = element_text(size = 25),
+    plot.title = element_text(size = 20),
+    axis.text.x = element_text(size = 25, color = "black", angle = 0),
+    axis.text.y = element_text(size = 25, color = "black")
+  ) +
+  NoLegend()
+qc_violins = ggarrange(nF_violin, TSS_violin, mito_violin)
+
+ggsave(
+  glue("{result_folder}QC_violins.png"),
+  plot = qc_violins,
+  width = 12,
+  height = 10,
+  dpi = 300,
+)
+
+ggsave(
+  glue("{result_folder}QC_violins.pdf"),
+  plot = qc_violins,
+  device = "pdf",
+  width = 12,
+  height = 10,
+  dpi = 300,
+)
+
 cols = c(
   "0" = "#9ecae1",
   "1" = "#fc9272"
@@ -153,6 +209,8 @@ g4 = FindNeighbors(object = g4,
 g4 = FindClusters(object = g4,
                   verbose = FALSE,
                   algorithm = 3)
+
+
 dim = DimPlot(object = g4, label = TRUE, pt.size = 2, label.size = 7, repel = TRUE) + 
   NoLegend() +
   scale_color_brewer(palette = "Set3") +

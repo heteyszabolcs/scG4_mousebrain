@@ -95,9 +95,12 @@ integration = function(seurat1 = "../data/GSE157637/Olig2_seurat_object.Rds",
     FindNeighbors(standard_wf, reduction = "pca", dims = 1:30)
   standard_wf <- FindClusters(standard_wf, resolution = 0.5)
   
+  #exporting
+  saveRDS(standard_wf, glue("{result_path}{label1}__{label2}_integrated.rds"))
+  
   # Visualization
   p1 <- DimPlot(
-    coembed,
+    standard_wf,
     reduction = "umap",
     pt.size = 1,
     label.size = 7,
@@ -106,7 +109,7 @@ integration = function(seurat1 = "../data/GSE157637/Olig2_seurat_object.Rds",
     na.value = "grey50",
     raster = TRUE
   ) +
-    scale_colour_manual(labels = c(label2, glue("Bartosovic et al. {label1}"), values = c("#fc9272", "#9ecae1"))) +
+    scale_fill_manual(labels = c(label2, glue("Bartosovic et al. {label1}"), values = c("#fc9272", "#9ecae1"))) +
     xlim(-15, 15) +
     ylim(-15, 15) +
     ggtitle(glue("scC&T integration, {label1} - {label2}")) +
@@ -138,24 +141,24 @@ integration = function(seurat1 = "../data/GSE157637/Olig2_seurat_object.Rds",
 }
 
 # run
-integration(seurat1 = "../data/GSE157637/H3K27ac_seurat_object.Rds",
-            label1 = "H3K27ac",
-            assay = "GA")
-integration(seurat1 = "../data/GSE157637/H3K4me3_seurat_object.Rds",
-            label1 = "H3K4me3",
-            assay = "GA")
-integration(seurat1 = "../data/GSE157637/H3K27me3_seurat_object.Rds",
-            label1 = "H3K27me3",
-            assay = "GA")
-integration(seurat1 = "../data/GSE157637/Rad21_seurat_object.Rds",
-            label1 = "Rad21",
-            assay = "GA")
-integration(seurat1 = "../data/GSE157637/Olig2_seurat_object.Rds",
-            label1 = "Olig2",
-            assay = "GA")
-integration(seurat1 = "../data/GSE157637/H3K36me3_seurat_object.Rds",
-            label1 = "H3K36me3",
-            assay = "GA")
+# integration(seurat1 = "../data/GSE157637/H3K27ac_seurat_object.Rds",
+#             label1 = "H3K27ac",
+#             assay = "GA")
+# integration(seurat1 = "../data/GSE157637/H3K4me3_seurat_object.Rds",
+#             label1 = "H3K4me3",
+#             assay = "GA")
+# integration(seurat1 = "../data/GSE157637/H3K27me3_seurat_object.Rds",
+#             label1 = "H3K27me3",
+#             assay = "GA")
+# integration(seurat1 = "../data/GSE157637/Rad21_seurat_object.Rds",
+#             label1 = "Rad21",
+#             assay = "GA")
+# integration(seurat1 = "../data/GSE157637/Olig2_seurat_object.Rds",
+#             label1 = "Olig2",
+#             assay = "GA")
+# integration(seurat1 = "../data/GSE157637/H3K36me3_seurat_object.Rds",
+#             label1 = "H3K36me3",
+#             assay = "GA")
 
 # integration of GFP sorted G4 data with Bartosovic et al. H3K4me3
 integration(seurat1 = "../data/GSE157637/H3K4me3_seurat_object.Rds",

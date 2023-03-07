@@ -1,9 +1,9 @@
 #!/bin/bash -l
-#SBATCH -A snic2020-15-9
+#SBATCH -A naiss2023-22-84
 #SBATCH -p core
-#SBATCH -n 4
+#SBATCH -n 8
 #SBATCH -t 12:00:00
-#SBATCH -M snowy
+#SBATCH -M rackham
 #SBATCH -J deeptools
 
 module load bioinfo-tools
@@ -17,6 +17,7 @@ computeMatrix reference-point -o ../results/deeptools/matrix_mESC_MEF_ol_ATAC.ma
  -R ../results/GenomicRanges/mESC-MEF_outputs/bulk_overlaps/MACS2_cl0_only.bed \
  ../results/GenomicRanges/mESC-MEF_outputs/bulk_overlaps/MACS2_intersection.bed \
  ../results/GenomicRanges/mESC-MEF_outputs/bulk_overlaps/MACS2_cl1_only.bed \
+ --referencePoint center \
  -b 3000 -a 3000 --samplesLabel "mESC ATAC-Seq" \
  --skipZeros --missingDataAsZero
 

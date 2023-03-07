@@ -10,7 +10,8 @@ suppressPackageStartupMessages({
   library("GenomeInfoDb")
   library("cowplot")
   library("Matrix")
-  # library("DoubletFinder")
+  library("ggpubr")
+  library("DoubletFinder")
 })
 
 
@@ -54,8 +55,6 @@ g4_res0.1 = CreateSeuratObject(counts = chrom_assay,
                                assay = "peaks",
                                meta.data = metadata)
 
-
-
 # check peaks in GRanges format
 granges(g4_res0.1)
 
@@ -82,6 +81,65 @@ g4_res0.1 = FindClusters(object = g4_res0.1,
                          resolution = 0.1,
                          algorithm = 3)
 
+# QC violin plots (without correction)
+nF_violin = VlnPlot(g4_res0.1, group.by = "seurat_clusters", features = "nFeature_peaks", pt.size = 0.1) +
+  scale_fill_manual(values = c("#addd8e", "#bdbdbd", "#addd8e")) +
+  ggtitle("nFeature (peaks)") +
+  xlab("cluster") + 
+  ylim(0, 30000) +
+  theme(
+    text = element_text(size = 25),
+    plot.title = element_text(size = 20),
+    axis.text.x = element_text(size = 25, color = "black", angle = 0),
+    axis.text.y = element_text(size = 25, color = "black")
+  ) +
+  NoLegend()
+TSS_violin = VlnPlot(g4_res0.1, group.by = "seurat_clusters", features = "TSS_fragments", pt.size = 0.1) +
+  scale_fill_manual(values = c("#addd8e", "#bdbdbd", "#addd8e")) +
+  ggtitle("TSS fragments") +
+  xlab("cluster") + 
+  ylim(0, 30000) +
+  theme(
+    text = element_text(size = 25),
+    plot.title = element_text(size = 20),
+    axis.text.x = element_text(size = 25, color = "black", angle = 0),
+    axis.text.y = element_text(size = 25, color = "black")
+  ) +
+  NoLegend()
+mito_violin = VlnPlot(g4_res0.1, group.by = "seurat_clusters", features = "mitochondrial", pt.size = 0.1) +
+  scale_fill_manual(values = c("#addd8e", "#bdbdbd", "#addd8e")) +
+  ggtitle("mitochondrial fragments") +
+  xlab("cluster") + 
+  ylim(0, 30000) +
+  theme(
+    text = element_text(size = 25),
+    plot.title = element_text(size = 20),
+    axis.text.x = element_text(size = 25, color = "black", angle = 0),
+    axis.text.y = element_text(size = 25, color = "black")
+  ) +
+  NoLegend()
+qc_violins = ggarrange(nF_violin, TSS_violin, mito_violin)
+
+ggsave(
+  glue("{result_folder}QC_violins.png"),
+  plot = qc_violins,
+  width = 12,
+  height = 10,
+  dpi = 300,
+)
+
+ggsave(
+  glue("{result_folder}QC_violins.pdf"),
+  plot = qc_violins,
+  device = "pdf",
+  width = 12,
+  height = 10,
+  dpi = 300,
+)
+
+# removing cluster 2 - cluster 2 can be omitted
+g4_res0.1 = subset(x = g4_res0.1, idents = 2, invert = TRUE)
+
 # Find all marker regions across clusters
 markers_res0.1 = FindAllMarkers(g4_res0.1)
 
@@ -90,38 +148,18 @@ cluster0 = meta_res0.1 %>% dplyr::filter(seurat_clusters == 0) %>% rownames %>% 
 print(glue("Number of cells in cluster 0: {cluster0}"))
 cluster1 = meta_res0.1 %>% dplyr::filter(seurat_clusters == 1) %>% rownames %>% length
 print(glue("Number of cells in cluster 1: {cluster1}"))
-cluster2 = meta_res0.1 %>% dplyr::filter(seurat_clusters == 2) %>% rownames %>% length
-print(glue("Number of cells in cluster 2: {cluster2}"))
+# cluster2 = meta_res0.1 %>% dplyr::filter(seurat_clusters == 2) %>% rownames %>% length
+# print(glue("Number of cells in cluster 2: {cluster2}"))
 
 reads_in_peaks0 = meta_res0.1 %>% dplyr::filter(seurat_clusters == 0) %>% pull(nFeature_peaks) %>% median
 print(glue("Median read count of features in cluster 0: {reads_in_peaks0}"))
 reads_in_peaks1 = meta_res0.1 %>% dplyr::filter(seurat_clusters == 1) %>% pull(nFeature_peaks) %>% median
 print(glue("Median read count of features in cluster 1: {reads_in_peaks1}"))
-reads_in_peaks2 = meta_res0.1 %>% dplyr::filter(seurat_clusters == 2) %>% pull(nFeature_peaks) %>% median
-print(glue("Median read count of features in cluster 2: {reads_in_peaks2}"))
 
 cols = c(
   "0" = "#addd8e",
-  "1" = "#bdbdbd",
-  "2" = "#addd8e"
+  "1" = "#bdbdbd"
 )
-
-
-
-dim_res0.1 = DimPlot(object = g4_res0.1, label = TRUE, pt.size = 2, label.size = 7, repel = TRUE, raster = TRUE) + 
-  #NoLegend() +
-  #scale_color_brewer(palette = "Set3") +
-  xlim(-10, 10) + 
-  ylim(-10, 10) + 
-  scale_colour_manual(values = cols, breaks = c("0", "1"), labels = c("oligodendrocytes (GFP+)", "unsorted brain")) +
-  ggtitle("unsorted brain G4 scCut&Tag, res = 0.1") +
-  theme(
-    text = element_text(size = 25),
-    plot.title = element_text(size = 20),
-    axis.text.x = element_text(size = 25, color = "black"),
-    axis.text.y = element_text(size = 25, color = "black")
-  )
-dim_res0.1
 
 ### clustering without resolution contraints
 g4 = CreateSeuratObject(counts = chrom_assay,
@@ -147,49 +185,57 @@ g4 = RunUMAP(object = g4,
              reduction = 'lsi',
              dims = 2:30)
 
-# find doublets using DoubletFinder 
-# g4_doublet_test = Seurat::Read10X_h5(filename = glue("{cellranger_folder}filtered_peak_bc_matrix.h5"), use.names = T)
-# g4_doublet_test = CreateSeuratObject(g4_doublet_test, project = "unsorted")
-# g4_doublet_test = NormalizeData(g4_doublet_test)
-# g4_doublet_test = FindVariableFeatures(g4_doublet_test, verbose = F)
-# g4_doublet_test = ScaleData(g4_doublet_test, vars.to.regress = c("nFeature_RNA", "percent_mito"),
-#                             verbose = F)
-# g4_doublet_test = RunPCA(g4_doublet_test, verbose = F, npcs = 20)
-# g4_doublet_test = RunUMAP(g4_doublet_test, dims = 1:10, verbose = F)
-# 
-# nExp <- round(ncol(g4_doublet_test) * 0.04)  # expect 4% doublets
-# g4_doublet_test <- doubletFinder_v3(g4_doublet_test, pN = 0.25, pK = 0.09, nExp = nExp, PCs = 1:10)
-# DF.name = colnames(g4_doublet_test@meta.data)[grepl("DF.classification", colnames(g4_doublet_test@meta.data))]
-# umap = DimPlot(g4_doublet_test, group.by = "orig.ident", pt.size = 0.3) + 
-#   xlim(-10, 10) +
-#   ylim(-10, 10) +
-#   ggtitle("unsorted brain G4 scCnT")
-# 
-# # indicate doublets
-# doublets = DimPlot(g4_doublet_test, group.by = DF.name, pt.size = 0.3) + 
-#   xlim(-10, 10) + 
-#   ylim(-10, 10) +
-#   ggtitle("Doublet finder")
+#find doublets using DoubletFinder
+g4_doublet_test = Seurat::Read10X_h5(filename = glue("{cellranger_folder}filtered_peak_bc_matrix.h5"), use.names = T)
+g4_doublet_test = CreateSeuratObject(g4_doublet_test, project = "unsorted")
+g4_doublet_test = NormalizeData(g4_doublet_test)
+g4_doublet_test = FindVariableFeatures(g4_doublet_test, verbose = F)
+g4_doublet_test = ScaleData(g4_doublet_test, vars.to.regress = c("nFeature_RNA", "percent_mito"),
+                            verbose = F)
+g4_doublet_test = RunPCA(g4_doublet_test, verbose = F, npcs = 20)
+g4_doublet_test = RunUMAP(g4_doublet_test, dims = 1:10, verbose = F)
+
+nExp <- round(ncol(g4_doublet_test) * 0.04)  # expect 4% doublets
+g4_doublet_test <- doubletFinder_v3(g4_doublet_test, pN = 0.25, pK = 0.09, nExp = nExp, PCs = 1:10)
+singlets = rownames(g4_doublet_test@meta.data[which(g4_doublet_test@meta.data[,5] == "Singlet"),])
+
+# keep only singlets!
+g4@meta.data = meta_res0.1 %>% mutate(doublet_test = ifelse(rownames(meta_res0.1) %in% singlets, "Singlet", NA_character_))
+g4_res0.1@meta.data = meta_res0.1 %>% mutate(doublet_test = ifelse(rownames(meta_res0.1) %in% singlets, "Singlet", NA_character_))
+g4 = subset(x = g4, subset = doublet_test == "Singlet")
+g4_res0.1 = subset(x = g4_res0.1, subset = doublet_test == "Singlet")
+
+DF.name = colnames(g4_doublet_test@meta.data)[grepl("DF.classification", colnames(g4_doublet_test@meta.data))]
+umap = DimPlot(g4_doublet_test, group.by = "orig.ident", pt.size = 0.3) +
+  xlim(-10, 10) +
+  ylim(-10, 10) +
+  ggtitle("unsorted brain G4 scCnT")
+
+# indicate doublets
+doublets = DimPlot(g4_doublet_test, group.by = DF.name, pt.size = 0.3) +
+  xlim(-10, 10) +
+  ylim(-10, 10) +
+  ggtitle("Doublet finder")
 
 # compare UMAPs
-# plot_grid(umap, doublets, nrow = 1, ncol = 2)
+plot_grid(umap, doublets, nrow = 1, ncol = 2)
 
-# ggsave(
-#   glue("{result_folder}Seurat_unsorted_doublets.png"),
-#   plot = last_plot(),
-#   width = 10,
-#   height = 5,
-#   dpi = 300,
-# )
-# 
-# ggsave(
-#   glue("{result_folder}Seurat_unsorted_doublets.pdf"),
-#   device = "pdf",
-#   plot = last_plot(),
-#   width = 10,
-#   height = 5,
-#   dpi = 300,
-# )
+ggsave(
+  glue("{result_folder}Seurat_unsorted_doublets.png"),
+  plot = last_plot(),
+  width = 10,
+  height = 5,
+  dpi = 300,
+)
+
+ggsave(
+  glue("{result_folder}Seurat_unsorted_doublets.pdf"),
+  device = "pdf",
+  plot = last_plot(),
+  width = 10,
+  height = 5,
+  dpi = 300,
+)
 
 ## carry on with dimension plots
 g4 = FindNeighbors(object = g4,
@@ -241,6 +287,21 @@ dim_blank = DimPlot(object = g4, label = TRUE, pt.size = 2, label.size = 7, repe
   )
 dim_blank
 
+dim_res0.1 = DimPlot(object = g4_res0.1, label = TRUE, pt.size = 2, label.size = 7, repel = TRUE, raster = TRUE) + 
+  #NoLegend() +
+  #scale_color_brewer(palette = "Set3") +
+  xlim(-10, 10) + 
+  ylim(-10, 10) + 
+  scale_colour_manual(values = cols, breaks = c("0", "1"), labels = c("oligodendrocytes (GFP+)", "unsorted brain")) +
+  ggtitle("unsorted brain G4 scCut&Tag, res = 0.1") +
+  theme(
+    text = element_text(size = 25),
+    plot.title = element_text(size = 20),
+    axis.text.x = element_text(size = 25, color = "black"),
+    axis.text.y = element_text(size = 25, color = "black")
+  )
+dim_res0.1
+
 # tuning
 # for(i in seq(5, 50, by = 5)) {
 #   tune = RunUMAP(object = g4,
@@ -274,7 +335,7 @@ ggsave(
 )
 
 ggsave(
-  glue("{result_folder}Seurat_mESC-MEF_UMAP_blankedplot.pdf"),
+  glue("{result_folder}Seurat_unsorted_UMAP_blankedplot.pdf"),
   plot = dim_blank,
   width = 10,
   height = 10,
@@ -293,6 +354,60 @@ ggsave(
   glue("{result_folder}Seurat_unsorted_UMAP_res0.1.pdf"),
   plot = dim_res0.1,
   width = 10,
+  height = 10,
+  dpi = 300,
+)
+
+# QC violin plots
+nF_violin = VlnPlot(g4_res0.1, group.by = "seurat_clusters", features = "nFeature_peaks", pt.size = 0.1) +
+  scale_fill_manual(values = c("#addd8e", "#bdbdbd", "#addd8e")) +
+  ggtitle("nFeature (peaks)") +
+  xlab("cluster") + 
+  ylim(0, 2000) +
+  theme(
+    text = element_text(size = 25),
+    plot.title = element_text(size = 20),
+    axis.text.x = element_text(size = 25, color = "black", angle = 0),
+    axis.text.y = element_text(size = 25, color = "black")
+  ) +
+  NoLegend()
+TSS_violin = VlnPlot(g4_res0.1, group.by = "seurat_clusters", features = "TSS_fragments", pt.size = 0.1) +
+  scale_fill_manual(values = c("#addd8e", "#bdbdbd", "#addd8e")) +
+  ggtitle("TSS fragments") +
+  xlab("cluster") + 
+  ylim(0, 2000) +
+  theme(
+    text = element_text(size = 25),
+    plot.title = element_text(size = 20),
+    axis.text.x = element_text(size = 25, color = "black", angle = 0),
+    axis.text.y = element_text(size = 25, color = "black")
+  ) +
+  NoLegend()
+mito_violin = VlnPlot(g4_res0.1, group.by = "seurat_clusters", features = "mitochondrial", pt.size = 0.1) +
+  scale_fill_manual(values = c("#addd8e", "#bdbdbd", "#addd8e")) +
+  ggtitle("mitochondrial fragments") +
+  xlab("cluster") + 
+  ylim(0, 2000) +
+  theme(
+    text = element_text(size = 25),
+    plot.title = element_text(size = 20),
+    axis.text.x = element_text(size = 25, color = "black", angle = 0),
+    axis.text.y = element_text(size = 25, color = "black"))
+qc_violins = ggarrange(nF_violin, TSS_violin, mito_violin)
+
+ggsave(
+  glue("{result_folder}QC_violins.png"),
+  plot = qc_violins,
+  width = 12,
+  height = 10,
+  dpi = 300,
+)
+
+ggsave(
+  glue("{result_folder}QC_violins.pdf"),
+  plot = qc_violins,
+  device = "pdf",
+  width = 12,
   height = 10,
   dpi = 300,
 )
@@ -318,7 +433,7 @@ DoHeatmap(object = g4_res0.1, features = g4_res0.1_markers$gene, slot = 'data', 
   labs(title = " ", fill = "gene act. score") +
   theme(
     plot.title = element_text(size = 8),
-    axis.text.y = element_text(size = 8, color = "black")
+    axis.text.y = element_text(size = 13, color = "black")
   ) 
 
 ggsave(
@@ -361,8 +476,22 @@ for(cluster in unique(barcodes$seurat_clusters)) {
   write_tsv(subset, glue("{result_folder}barcodes_cluster_{as.character(cluster)}_res0.1.tsv"), col_names = FALSE)
 }
 
+barcodes = g4@meta.data %>% 
+  rownames_to_column("barcodes") %>%
+  dplyr::select(barcodes, seurat_clusters)
+write_tsv(barcodes, glue("{result_folder}barcodes_per_cluster.tsv"))
+
+for(cluster in unique(barcodes$seurat_clusters)) {
+  subset = barcodes %>% dplyr::filter(seurat_clusters == cluster)
+  write_tsv(subset, glue("{result_folder}barcodes_cluster_{as.character(cluster)}.tsv"), col_names = FALSE)
+}
+
+
 # export Rds
 saveRDS(g4_res0.1, glue("{result_folder}unsorted_res0.1.Rds"))
+
+# export Rds
+saveRDS(g4, glue("{result_folder}unsorted.Rds"))
 
 # peak calling per Seurat clusters
 peaks = CallPeaks(
@@ -382,5 +511,21 @@ write.table(
   col.names = F
 )
 
+peaks = CallPeaks(
+  object = g4,
+  group.by = "seurat_clusters",
+  cleanup = FALSE,
+  outdir = result_folder,
+  effective.genome.size = 2652783500
+)
+
+write.table(
+  as.data.frame(peaks),
+  file = glue("{result_folder}peaks_per_clusters.bed"),
+  quote = F,
+  sep = "\t",
+  row.names = F,
+  col.names = F
+)
 
 

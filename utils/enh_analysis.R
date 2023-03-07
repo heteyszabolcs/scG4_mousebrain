@@ -90,15 +90,12 @@ g4_peaks =
 ## find overlaps between G4 peaks and active enhancers
 # query: g4_peaks
 # subject: enhancers
-g4s_no_ol = g4_peaks[c("0", "1", "2", "3", "4", "5", "6")]
+g4s_no_ol = g4_peaks[c("0", "1", "2", "3", "4")]
 g4_cm_enh_quant = numeric()
 for (cluster in names(g4s_no_ol)) {
   ol = suppressWarnings(findOverlaps(g4_peaks[[cluster]], cm_enh, type = "any", minoverlap = 1))
   g4_cm_enh_quant = c(g4_cm_enh_quant, length(ol))
 }
-
-
-
 
 get_signals = function(selected_cluster = "0") {
   require("wigglescout")
@@ -151,7 +148,7 @@ for (cluster in names(g4s_no_ol)) {
   g4_gl_enh_quant = c(g4_gl_enh_quant, length(ol))
 }
 
-clusters = c("0", "1", "2", "3", "4", "5", "6")
+clusters = c("0", "1", "2", "3", "4")
 cm_bar = tibble(
   overlap = g4_cm_enh_quant,
   peak_count = sapply(clusters, function(x) length(g4_peaks[[which(names(g4_peaks) == x)]])),
@@ -205,7 +202,7 @@ ggsave(
   device = "pdf"
 )
 
-clusters = c("0", "1", "2", "3", "4", "5", "6")
+clusters = c("0", "1", "2", "3", "4")
 gl_bar = tibble(
   overlap = g4_gl_enh_quant,
   peak_count = sapply(clusters, function(x) length(g4_peaks[[which(names(g4_peaks) == x)]])),

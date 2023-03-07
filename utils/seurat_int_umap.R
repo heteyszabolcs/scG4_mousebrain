@@ -76,6 +76,7 @@ new_ids[new_ids == 'MOL3'] = 'MOL'
 new_ids[new_ids == 'MOL4'] = 'MOL'
 new_ids[new_ids == 'MOL5'] = 'MOL'
 new_ids[new_ids == 'MOL6'] = 'MOL'
+new_ids[new_ids == 'PPR'] = 'VLMC'
 rna@meta.data$merged_cell_class = new_ids
 
 p1 = DimPlot(sorted,
@@ -141,6 +142,13 @@ transfer.anchors = FindTransferAnchors(
   k.filter = NA,
   features = common.genes
 )
+
+# extract anchor matrix of AnchorSet object
+g4_anchor_matrix = as_tibble(transfer.anchors@anchors)
+g4_anchor_matrix = g4_anchor_matrix %>%
+  mutate(anchor1_barcode = colnames(rna@assays$RNA@counts)[g4_anchor_matrix$cell1]) %>%
+  mutate(anchor2_barcode = colnames(sorted@assays$GA@counts)[g4_anchor_matrix$cell2])
+write_tsv(g4_anchor_matrix, glue("{result_folder}sorted_anchor_matrix.tsv"))
 
 genes.use = VariableFeatures(rna)
 refdata = GetAssayData(rna, assay = "RNA", slot = "data")[genes.use, ]
@@ -644,14 +652,20 @@ coembed_experiments = DimPlot(
 
 coembed@meta.data$seurat_clusters[is.na(coembed@meta.data$seurat_clusters)] = "scRNA-Seq"
 
+ggsave(
+  glue("{result_folder}Seurat_Marques_integration_datatypes.pdf"),
+  plot = coembed_experiments,
+  width = 13,
+  height = 10,
+  device = "pdf"
+)
 
 cols = c(
   "scRNA-Seq" = "#bdbdbd",
   "0" = "#de2d26",
   "1" = "#bdbdbd",
   "2" = "#bdbdbd",
-  "3" = "#bdbdbd",
-  "4" = "#bdbdbd"
+  "3" = "#bdbdbd"
   # "5" = "#bdbdbd",
   # "6" = "#bdbdbd"
 )
@@ -846,107 +860,13 @@ coembed_cluster4 = DimPlot(
   ) +
   NoAxes()
 
-ggsave(
-  glue("{result_folder}Seurat_Marques_integration_cl4.pdf"),
-  plot = coembed_cluster4,
-  width = 10,
-  height = 10,
-  device = "pdf"
-)
-
-cols = c(
-  "scRNA-Seq" = "#bdbdbd",
-  "0" = "#bdbdbd",
-  "1" = "#bdbdbd",
-  "2" = "#bdbdbd",
-  "3" = "#bdbdbd",
-  "4" = "#bdbdbd")
-  # "5" = "#de2d26",
-  # "6" = "#bdbdbd"
-
-
-# coembed_cluster5 = DimPlot(
-#   coembed,
-#   pt.size = 1,
-#   label.size = 7,
-#   group.by = 'seurat_clusters',
-#   repel = TRUE,
-#   order = "5",
-#   raster = TRUE
-# ) +
-#   xlim(-15, 15) +
-#   ylim(-15, 15) +
-#   scale_colour_manual(values = cols,
-#                       breaks = "5",
-#                       labels = "cluster 5") +
-#   ggtitle(" ") +
-#   theme(
-#     text = element_text(size = 25),
-#     plot.title = element_text(size = 20),
-#     axis.text.x = element_text(size = 25, color = "black"),
-#     axis.text.y = element_text(size = 25, color = "black")
-#   ) +
-#   NoAxes()
-# 
-# ggsave(
-#   glue("{result_folder}Seurat_Marques_integration_cl5.pdf"),
-#   plot = coembed_cluster5,
-#   width = 10,
-#   height = 10,
-#   device = "pdf"
-# )
-
-cols = c(
-  "scRNA-Seq" = "#bdbdbd",
-  "0" = "#bdbdbd",
-  "1" = "#bdbdbd",
-  "2" = "#bdbdbd",
-  "3" = "#bdbdbd",
-  "4" = "#bdbdbd"
-#   "5" = "#bdbdbd",
-#   "6" = "#de2d26"
- )
-
-# coembed_cluster6 = DimPlot(
-#   coembed,
-#   pt.size = 1,
-#   label.size = 7,
-#   group.by = 'seurat_clusters',
-#   repel = TRUE,
-#   order = "6",
-#   raster = TRUE
-# ) +
-#   xlim(-15, 15) +
-#   ylim(-15, 15) +
-#   scale_colour_manual(values = cols,
-#                       breaks = "6",
-#                       labels = "cluster 6") +
-#   ggtitle(" ") +
-#   theme(
-#     text = element_text(size = 25),
-#     plot.title = element_text(size = 20),
-#     axis.text.x = element_text(size = 25, color = "black"),
-#     axis.text.y = element_text(size = 25, color = "black")
-#   ) +
-#   NoAxes()
-
-# ggsave(
-#   glue("{result_folder}Seurat_Marques_integration_cl6.pdf"),
-#   plot = coembed_cluster6,
-#   width = 10,
-#   height = 10,
-#   device = "pdf"
-# )
-
 clusters = plot_grid(
   coembed_cluster0,
   coembed_cluster1,
   coembed_cluster2,
   coembed_cluster3,
-  coembed_cluster4,
-  #coembed_cluster6,
   ncol = 2,
-  nrow = 4
+  nrow = 2
 )
 
 ggsave(
