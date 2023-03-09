@@ -94,6 +94,18 @@ nF_violin = VlnPlot(g4_res0.1, group.by = "seurat_clusters", features = "nFeatur
     axis.text.y = element_text(size = 25, color = "black")
   ) +
   NoLegend()
+nC_violin = VlnPlot(g4_res0.1, group.by = "seurat_clusters", features = "nCount_peaks", pt.size = 0.1) +
+  scale_fill_manual(values = c("#addd8e", "#bdbdbd", "#addd8e")) +
+  ggtitle("nFeature (peaks)") +
+  xlab("cluster") + 
+  ylim(0, 30000) +
+  theme(
+    text = element_text(size = 25),
+    plot.title = element_text(size = 20),
+    axis.text.x = element_text(size = 25, color = "black", angle = 0),
+    axis.text.y = element_text(size = 25, color = "black")
+  ) +
+  NoLegend()
 TSS_violin = VlnPlot(g4_res0.1, group.by = "seurat_clusters", features = "TSS_fragments", pt.size = 0.1) +
   scale_fill_manual(values = c("#addd8e", "#bdbdbd", "#addd8e")) +
   ggtitle("TSS fragments") +
@@ -118,7 +130,7 @@ mito_violin = VlnPlot(g4_res0.1, group.by = "seurat_clusters", features = "mitoc
     axis.text.y = element_text(size = 25, color = "black")
   ) +
   NoLegend()
-qc_violins = ggarrange(nF_violin, TSS_violin, mito_violin)
+qc_violins = ggarrange(nF_violin, nC_violin, TSS_violin, mito_violin)
 
 ggsave(
   glue("{result_folder}QC_violins.png"),
@@ -245,13 +257,14 @@ g4 = FindClusters(object = g4,
                   verbose = FALSE,
                   algorithm = 3)
 
+# removing cluster 5 - cluster 5 contains only 26 cells and in downstream steps showed some bias
+g4 = subset(x = g4, idents = 5, invert = TRUE)
+
 # Find all marker regions across clusters
 markers = FindAllMarkers(g4, only.pos = TRUE, thresh.use = 0.1)
 
 top.markers = markers %>% group_by(cluster) %>% top_n(wt = avg_log2FC,n = 5)
 DoHeatmap(object = g4, features = top.markers$gene,slot = 'data', raster = TRUE) + scale_fill_gradient(low = "white",  high = "#fc9272")
-
-
 
 # export marker regions
 markers = markers %>% separate(gene, sep = "-", into = c("chr", "start", "end"), remove = TRUE)
@@ -371,6 +384,18 @@ nF_violin = VlnPlot(g4_res0.1, group.by = "seurat_clusters", features = "nFeatur
     axis.text.y = element_text(size = 25, color = "black")
   ) +
   NoLegend()
+nC_violin = VlnPlot(g4_res0.1, group.by = "seurat_clusters", features = "nCount_peaks", pt.size = 0.1) +
+  scale_fill_manual(values = c("#addd8e", "#bdbdbd", "#addd8e")) +
+  ggtitle("nCount (peaks)") +
+  xlab("cluster") + 
+  ylim(0, 15000) +
+  theme(
+    text = element_text(size = 25),
+    plot.title = element_text(size = 20),
+    axis.text.x = element_text(size = 25, color = "black", angle = 0),
+    axis.text.y = element_text(size = 25, color = "black")
+  ) +
+  NoLegend()
 TSS_violin = VlnPlot(g4_res0.1, group.by = "seurat_clusters", features = "TSS_fragments", pt.size = 0.1) +
   scale_fill_manual(values = c("#addd8e", "#bdbdbd", "#addd8e")) +
   ggtitle("TSS fragments") +
@@ -393,7 +418,72 @@ mito_violin = VlnPlot(g4_res0.1, group.by = "seurat_clusters", features = "mitoc
     plot.title = element_text(size = 20),
     axis.text.x = element_text(size = 25, color = "black", angle = 0),
     axis.text.y = element_text(size = 25, color = "black"))
-qc_violins = ggarrange(nF_violin, TSS_violin, mito_violin)
+qc_violins = ggarrange(nF_violin, nC_violin, TSS_violin, mito_violin)
+
+ggsave(
+  glue("{result_folder}QC_violins_res0.1.png"),
+  plot = qc_violins,
+  width = 12,
+  height = 10,
+  dpi = 300,
+)
+
+ggsave(
+  glue("{result_folder}QC_violins_res0.1.pdf"),
+  plot = qc_violins,
+  device = "pdf",
+  width = 12,
+  height = 10,
+  dpi = 300,
+)
+
+nF_violin = VlnPlot(g4, group.by = "seurat_clusters", features = "nFeature_peaks", pt.size = 0.1) +
+  scale_color_brewer(palette = "Set3") +
+  ggtitle("nFeature (peaks)") +
+  xlab("cluster") + 
+  ylim(0, 2000) +
+  theme(
+    text = element_text(size = 25),
+    plot.title = element_text(size = 20),
+    axis.text.x = element_text(size = 25, color = "black", angle = 0),
+    axis.text.y = element_text(size = 25, color = "black")
+  ) +
+  NoLegend()
+nC_violin = VlnPlot(g4, group.by = "seurat_clusters", features = "nCount_peaks", pt.size = 0.1) +
+  scale_color_brewer(palette = "Set3") +
+  ggtitle("nCount (peaks)") +
+  xlab("cluster") + 
+  ylim(0, 4000) +
+  theme(
+    text = element_text(size = 25),
+    plot.title = element_text(size = 20),
+    axis.text.x = element_text(size = 25, color = "black", angle = 0),
+    axis.text.y = element_text(size = 25, color = "black")
+  ) +
+  NoLegend()
+TSS_violin = VlnPlot(g4, group.by = "seurat_clusters", features = "TSS_fragments", pt.size = 0.1) +
+  scale_color_brewer(palette = "Set3") +
+  ggtitle("TSS fragments") +
+  xlab("cluster") + 
+  ylim(0, 2000) +
+  theme(
+    text = element_text(size = 25),
+    plot.title = element_text(size = 20),
+    axis.text.x = element_text(size = 25, color = "black", angle = 0),
+    axis.text.y = element_text(size = 25, color = "black")
+  ) +
+  NoLegend()
+mito_violin = VlnPlot(g4, group.by = "seurat_clusters", features = "mitochondrial", pt.size = 0.1) +
+  scale_color_brewer(palette = "Set3") +
+  ggtitle("mitochondrial fragments") +
+  xlab("cluster") + 
+  ylim(0, 2000) +
+  theme(
+    text = element_text(size = 25),
+    plot.title = element_text(size = 20),
+    axis.text.x = element_text(size = 25, color = "black", angle = 0),
+    axis.text.y = element_text(size = 25, color = "black"))
+qc_violins = ggarrange(nF_violin, nC_violin, TSS_violin, mito_violin)
 
 ggsave(
   glue("{result_folder}QC_violins.png"),
@@ -411,6 +501,7 @@ ggsave(
   height = 10,
   dpi = 300,
 )
+
 
 # Create a gene activity matrix
 gene.activities = GeneActivity(g4_res0.1)
@@ -494,22 +585,22 @@ saveRDS(g4_res0.1, glue("{result_folder}unsorted_res0.1.Rds"))
 saveRDS(g4, glue("{result_folder}unsorted.Rds"))
 
 # peak calling per Seurat clusters
-peaks = CallPeaks(
-  object = g4_res0.1,
-  group.by = "seurat_clusters",
-  cleanup = FALSE,
-  outdir = result_folder,
-  effective.genome.size = 2652783500
-)
-
-write.table(
-  as.data.frame(peaks),
-  file = glue("{result_folder}peaks_per_clusters_res0.1.bed"),
-  quote = F,
-  sep = "\t",
-  row.names = F,
-  col.names = F
-)
+# peaks = CallPeaks(
+#   object = g4_res0.1,
+#   group.by = "seurat_clusters",
+#   cleanup = FALSE,
+#   outdir = result_folder,
+#   effective.genome.size = 2652783500
+# )
+# 
+# write.table(
+#   as.data.frame(peaks),
+#   file = glue("{result_folder}peaks_per_clusters_res0.1.bed"),
+#   quote = F,
+#   sep = "\t",
+#   row.names = F,
+#   col.names = F
+# )
 
 peaks = CallPeaks(
   object = g4,

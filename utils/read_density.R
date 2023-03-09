@@ -37,8 +37,7 @@ mat = read_cov %>% dplyr::select(starts_with("X")) %>% dplyr::select(
   "1" = X1,
   "2" = X2,
   "3" = X3,
-  "4" = X4,
-  "5" = X5
+  "4" = X4
 )
 mat = as.matrix(mat)
 
@@ -64,8 +63,7 @@ colnames(mat_log) = c(
   "1",
   "2",
   "3",
-  "4",
-  "5"
+  "4"
 )
 
 pdf(
@@ -109,9 +107,9 @@ print(unique_hm)
 dev.off()
 
 tibble = as_tibble(mat_log)
-tibble = tibble %>% mutate(max = pmax(rownames(tibble)), type = colnames(tibble)[max.col(tibble[, 1:6])])
+tibble = tibble %>% mutate(max = pmax(rownames(tibble)), type = colnames(tibble)[max.col(tibble[, 1:5])])
 mat_grubbs = as_tibble(mat_grubbs)
-mat_grubbs_max = mat_grubbs %>% mutate(max = pmax(rownames(mat_grubbs)), type = colnames(mat_grubbs)[max.col(mat_grubbs[, 1:6])]) %>%
+mat_grubbs_max = mat_grubbs %>% mutate(max = pmax(rownames(mat_grubbs)), type = colnames(mat_grubbs)[max.col(mat_grubbs[, 1:5])]) %>%
   mutate(
     seqnames = read_cov_grubbs$seqnames,
     start = read_cov_grubbs$start,
@@ -176,7 +174,6 @@ read_cov_grubbs_annot = read_cov_grubbs %>% mutate(rowid = paste0(seqnames, "_",
     "cluster 2" = X2,
     "cluster 3" = X3,
     "cluster 4" = X4,
-    "cluster 5" = X5,
     distanceToTSS,
     "gene" = SYMBOL,
     rowid
@@ -199,7 +196,6 @@ mat_grubbs_max = mat_grubbs_max %>% inner_join(., read_cov_grubbs_annot, by = c(
     "cluster 2",
     "cluster 3",
     "cluster 4",
-    "cluster 5",
     unique,
     distanceToTSS,
     gene
@@ -750,7 +746,7 @@ dev.off()
 # dev.off()
 
 # cluster 2
-cluster2_unique = mat_grubbs_max %>% filter(unique == "2") %>% pull("gene")
+cluster2_unique = mat_grubbs_max %>% dplyr::filter(unique == "2") %>% pull("gene")
 
 existing_gene_symbols = character()
 for (gene in cluster2_unique) {
@@ -827,7 +823,7 @@ print(cl_2_hm)
 dev.off()
 
 # cluster 3
-cluster3_unique = mat_grubbs_max %>% filter(unique == "3") %>% pull("gene")
+cluster3_unique = mat_grubbs_max %>% dplyr::filter(unique == "3") %>% pull("gene")
 
 existing_gene_symbols = character()
 for (gene in cluster3_unique) {
@@ -904,7 +900,7 @@ print(cl_3_hm)
 dev.off()
 
 # cluster 1
-cluster1_unique = mat_grubbs_max %>% filter(unique == "1") %>% pull("gene")
+cluster1_unique = mat_grubbs_max %>% dplyr::filter(unique == "1") %>% pull("gene")
 
 existing_gene_symbols = character()
 for (gene in cluster1_unique) {

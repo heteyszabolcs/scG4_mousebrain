@@ -163,7 +163,7 @@ imputation = TransferData(
   prediction.assay = TRUE
 )
 
-# predict cell labels
+# predict cell labels and add to metadata table
 cell_class_pred = TransferData(
   anchorset = transfer.anchors,
   refdata = rna@meta.data$merged_cell_class,
@@ -172,8 +172,51 @@ cell_class_pred = TransferData(
   prediction.assay = TRUE
 )
 
+predicted_labels = cell_class_pred@data
+cell_types = rownames(predicted_labels)
+predicted_labels = as.tibble(predicted_labels) %>% mutate(pred_cell_type = cell_types)
+predicted_labels = predicted_labels %>% pivot_longer(., cols = "AAACGAAAGAAGCCGT-1":"TTTGTGTTCTCGCGTT-1", names_to = "cell_id", values_to = "pred_score")
+predicted_labels = predicted_labels %>% group_by(cell_id) %>% dplyr::slice(which.max(pred_score))
+
+meta = sorted@meta.data
+meta = meta %>% mutate(rownames_to_column(., var = "barcode")) %>% inner_join(., predicted_labels, by = c("barcode" = "cell_id")) 
+barcodes = meta %>% pull(barcode)
+meta = meta %>% dplyr::select(-barcode)
+rownames(meta) = barcodes
+sorted@meta.data = sorted_meta
+
+# export G4 object with predicted labels
 saveRDS(cell_class_pred, glue("{result_folder}sorted_cell_label_preds.Rds"))
 
+# visualizing predctions
+# UMAP
+pred_umap = DimPlot(sorted,
+             pt.size = 2,
+             label.size = 7,
+             repel = TRUE,
+             raster = TRUE,
+             group.by = "pred_cell_type") +
+  scale_color_brewer(palette = "Set3") +
+  xlim(-15, 15) +
+  ylim(-15, 15) +
+  ggtitle(" ") +
+  theme(
+    text = element_text(size = 25),
+    plot.title = element_text(size = 20),
+    axis.text.x = element_text(size = 25, color = "black"),
+    axis.text.y = element_text(size = 25, color = "black")
+  ) + NoAxes()
+pred_umap
+
+ggsave(
+  glue("{result_folder}predicted_labels_UMAP.pdf"),
+  plot = pred_umap,
+  width = 13,
+  height = 10,
+  device = "pdf"
+)
+
+# prediction score heatmap
 predictions = as.matrix(cell_class_pred@data)
 predictions = predictions[rownames(predictions) != "max",]
 col_fun = colorRamp2(c(0, 0.5, 1), c("#421654", "#458f8a", "#f0e527"))
@@ -204,6 +247,7 @@ Heatmap(
 )
 dev.off()
 
+# prediction score boxplot
 types = rownames(predictions)
 predictions = as.data.frame(predictions)
 predictions$types = types
@@ -249,34 +293,12 @@ ggsave(
 
 sorted[['RNA']] = imputation
 saveRDS(sorted, glue("{result_folder}sorted_int_Marques.Rds"))
+
+# coembedding G4 and Marques et al. scRNA-Seq
 sorted = readRDS(glue("{result_folder}sorted_int_Marques.Rds"))
 
 rna@meta.data$data_type = "scRNA-Seq (Marques et al.)"
 sorted@meta.data$data_type = "sorted G4 scCut&Tag"
-
-# FeaturePlot(
-#   sorted,
-#   features = "nCount_peaks",
-#   min.cutoff = 0,
-#   max.cutoff = 3000,
-#   raster = TRUE
-# ) +
-#   xlim(-15, 15) +
-#   ylim(-10, 10) +
-#   scale_color_gradient2(
-#     low = "#0d0a1e",
-#     mid = "#c44a46",
-#     high = "#eef07a",
-#     midpoint = 1500
-#   ) +
-#   theme(
-#     legend.position = 'bottom',
-#     text = element_text(size = 15),
-#     plot.title = element_text(size = 20),
-#     axis.text.x = element_text(size = 25, color = "black"),
-#     axis.text.y = element_text(size = 25, color = "black")
-#   ) +
-#   NoAxes()
 
 coembed = merge(x = rna, y = sorted)
 
@@ -648,7 +670,7 @@ coembed_experiments = DimPlot(
     plot.title = element_text(size = 20),
     axis.text.x = element_text(size = 25, color = "black"),
     axis.text.y = element_text(size = 25, color = "black")
-  )
+  ) + NoAxes()
 
 coembed@meta.data$seurat_clusters[is.na(coembed@meta.data$seurat_clusters)] = "scRNA-Seq"
 

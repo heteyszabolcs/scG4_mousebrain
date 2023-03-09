@@ -37,12 +37,13 @@ grubbs = fread(
   "../results/Seurat/callpeaks_unsorted/Grubbs_test-unique_G4_peaks_0.001_joined.tsv"
 )
 
-markers_sign = markers %>% dplyr::filter(abs(avg_log2FC) > 0.25 & p_val_adj < 0.05)
-print(glue("Grubbs test found {as.character(length(unique(grubbs$gene)))} unique peak"))
+markers_sign = markers %>% dplyr::filter(abs(avg_log2FC) > 0.25 & p_val_adj < 0.05) %>% 
+  dplyr::filter(abs(distanceToTSS) < 3000)
+print(glue("Grubbs test found {as.character(length(unique(grubbs$gene)))} unique G4 peak"))
 grubbs = grubbs %>% dplyr::filter(abs(distanceToTSS) < 3000)
-print(glue("Grubbs test found {length(setdiff(grubbs$gene, markers_sign$gene))} unique promoter proximal peak"))
-print(glue("Grubbs test found {length(intersect(grubbs$gene, markers_sign$gene))} common promoter proximal peak"))
-print(glue("FindMarker analysis found {length(setdiff(markers_sign$gene, grubbs$gene))} unique promoter proximal peak"))
+print(glue("Grubbs test found {length(setdiff(grubbs$gene, markers_sign$gene))} unique promoter proximal G4 peak"))
+print(glue("Grubbs test found {length(intersect(grubbs$gene, markers_sign$gene))} common promoter proximal G4 peak"))
+print(glue("FindMarker analysis found {length(setdiff(markers_sign$gene, grubbs$gene))} unique promoter proximal G4 peak"))
 
 # filter and export to bed
 clusterwise = markers %>% dplyr::filter(abs(avg_log2FC) > 0.2 &
@@ -83,9 +84,6 @@ print(
 )
 
 markers_all = fread("../results/Seurat/callpeaks_unsorted/FindAllMarkers_output_annot.tsv")
-setdiff(unique(grubbs[which(unique == "2")]$gene), unique(markers[which(cluster == "2")]$gene) 
-          )
-
 
 markers_wide = pivot_wider(
   markers,
