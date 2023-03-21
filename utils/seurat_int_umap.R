@@ -175,14 +175,16 @@ cell_class_pred = TransferData(
 predicted_labels = cell_class_pred@data
 cell_types = rownames(predicted_labels)
 predicted_labels = as.tibble(predicted_labels) %>% mutate(pred_cell_type = cell_types)
-predicted_labels = predicted_labels %>% pivot_longer(., cols = "AAACGAAAGAAGCCGT-1":"TTTGTGTTCTCGCGTT-1", names_to = "cell_id", values_to = "pred_score")
-predicted_labels = predicted_labels %>% group_by(cell_id) %>% dplyr::slice(which.max(pred_score))
+predicted_labels = predicted_labels %>% pivot_longer(., cols = "AAACGAAAGAAGCCGT-1":"TTTGTGTTCTCGCGTT-1", 
+                                                     names_to = "cell_id", values_to = "pred_max_score")
+predicted_labels = predicted_labels %>% group_by(cell_id) %>% dplyr::slice(which.max(pred_max_score))
 
-meta = sorted@meta.data
-meta = meta %>% mutate(rownames_to_column(., var = "barcode")) %>% inner_join(., predicted_labels, by = c("barcode" = "cell_id")) 
-barcodes = meta %>% pull(barcode)
-meta = meta %>% dplyr::select(-barcode)
-rownames(meta) = barcodes
+sorted_meta = sorted@meta.data
+sorted_meta = sorted_meta %>% mutate(rownames_to_column(., var = "barcode")) %>% 
+  inner_join(., predicted_labels, by = c("barcode" = "cell_id")) 
+barcodes = sorted_meta %>% pull(barcode)
+sorted_meta = sorted_meta %>% dplyr::select(-barcode)
+rownames(sorted_meta) = barcodes
 sorted@meta.data = sorted_meta
 
 # export G4 object with predicted labels

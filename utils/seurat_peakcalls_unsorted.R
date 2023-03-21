@@ -504,6 +504,7 @@ ggsave(
 
 
 # Create a gene activity matrix
+# GeneActivity scores: counts over 2 kb-upstream region and gene body
 gene.activities = GeneActivity(g4_res0.1)
 
 g4_res0.1[['GA']] = CreateAssayObject(counts = gene.activities)

@@ -1,7 +1,7 @@
 #!/bin/bash -l
 #SBATCH -A naiss2023-22-84
 #SBATCH -p core
-#SBATCH -n 8
+#SBATCH -n 4
 #SBATCH -t 12:00:00
 #SBATCH -M rackham
 #SBATCH -J deeptools
