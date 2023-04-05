@@ -25,14 +25,12 @@ computeMatrix reference-point -o ../results/deeptools/matrix_unsorted_clusterwis
  --referencePoint center \
  -b 3000 -a 3000 --samplesLabel "H3K4me3" "H3K4me1" "H3K27me3" "H3K27ac" --skipZeros --missingDataAsZero
  
- #../data/bw/ATAC-H33WT.mm10.bw \
-
 plotHeatmap -m ../results/deeptools/matrix_unsorted_clusterwise.mat.gz \
  -out "../results/deeptools/unsorted_clusterwise.pdf" \
  --refPointLabel "G4" \
  --whatToShow "heatmap and colorbar" \
  --heatmapHeight 14 \
- --colorMap "Greens" \
+ --colorMap "Blues" \
  --yMin 0 \
  --yMax 15 \
  --zMax 15 \
@@ -46,7 +44,7 @@ plotHeatmap -m ../results/deeptools/matrix_unsorted_clusterwise.mat.gz \
  --refPointLabel "G4" \
  --whatToShow "heatmap and colorbar" \
  --heatmapHeight 14 \
- --colorMap "Greens" \
+ --colorMap "Blues" \
  --yMin 0 \
  --yMax 15 \
  --zMax 15 \
