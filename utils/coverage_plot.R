@@ -56,6 +56,17 @@ sapply(opc, make_coverageplot, object = sorted, group = "seurat_clusters", bulk 
 
 make_coverageplot(object = unsorted, gene = "Cspg5", group = "seurat_clusters", bulk = TRUE)
 
+make_coverageplot(object = unsorted, gene = "Myc", group = "seurat_clusters", bulk = TRUE)
+ggsave(
+  "../results/Seurat/callpeaks_unsorted/coverageplot_Myc_common.pdf",
+  plot = last_plot(),
+  width = 6,
+  height = 6
+)
+
+
+
+## TilePlots
 # export
 ggsave(
   "../results/genome_browser/GFPsorted-marcks.pdf",
@@ -65,10 +76,34 @@ ggsave(
   device = "pdf"
 )
  
-TilePlot(object = mesc_mef, region = c("Cdhr3"), tile.cells = 100, order.by = "total")  + scale_fill_gradient(low = "white", high = "#3182bd")
+TilePlot(object = mesc_mef, region = c("Cdhr3"), tile.cells = 100, order.by = "total") + 
+  scale_fill_gradient(low = "white", high = "#3182bd")
+
 # export
 ggsave(
   "../results/Seurat/callpeaks_mESC-MEF/TilePlot_Cdhr3_cluster0_spec.pdf",
+  plot = last_plot(),
+  width = 6,
+  height = 6,
+  device = "pdf"
+)
+
+TilePlot(object = unsorted, region = "Th", tile.cells = 100, order.by = "total") + 
+  scale_fill_gradient(low = "white", high = "#3182bd")
+# export
+ggsave(
+  "../results/Seurat/callpeaks_unsorted/TilePlot_Th_common.pdf",
+  plot = last_plot(),
+  width = 6,
+  height = 6,
+  device = "pdf"
+)
+
+TilePlot(object = unsorted, region = "Myc", tile.cells = 100, order.by = "total") + 
+  scale_fill_gradient(low = "white", high = "#3182bd")
+# export
+ggsave(
+  "../results/Seurat/callpeaks_unsorted/TilePlot_Myc_common.pdf",
   plot = last_plot(),
   width = 6,
   height = 6,
