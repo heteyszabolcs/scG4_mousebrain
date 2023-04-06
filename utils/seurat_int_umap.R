@@ -76,7 +76,6 @@ new_ids[new_ids == 'MOL3'] = 'MOL'
 new_ids[new_ids == 'MOL4'] = 'MOL'
 new_ids[new_ids == 'MOL5'] = 'MOL'
 new_ids[new_ids == 'MOL6'] = 'MOL'
-new_ids[new_ids == 'PPR'] = 'VLMC'
 rna@meta.data$merged_cell_class = new_ids
 
 p1 = DimPlot(sorted,
@@ -84,7 +83,7 @@ p1 = DimPlot(sorted,
              label.size = 7,
              repel = TRUE,
              raster = TRUE) +
-  scale_color_brewer(palette = "Set3") +
+  scale_color_brewer(palette = "Pastel1") +
   xlim(-15, 15) +
   ylim(-15, 15) +
   ggtitle(" ") +
@@ -397,6 +396,7 @@ get_best_marker = function(cell_type) {
 }
 
 get_underexpr_marker = function(cell_type) {
+  print(cell_type)
   coembed.g4 = coembed[,coembed$data_type == "sorted G4 scCut&Tag"]
   marker = markers %>% dplyr::filter(str_detect(cluster, cell_type)) %>%
     arrange(avg_log2FC) %>% top_n(n = -1, wt = avg_log2FC) %>% pull(gene)
@@ -643,7 +643,7 @@ coembed_clusters = DimPlot(
   repel = TRUE,
   raster = TRUE
 ) +
-  scale_color_brewer(palette = "Set3") +
+  scale_color_brewer(palette = "Pastel1") +
   xlim(-15, 15) +
   ylim(-15, 15) +
   ggtitle(" ") +
