@@ -36,7 +36,7 @@ coembed = RunPCA(coembed, features = genes.use, verbose = FALSE)
 ElbowPlot(coembed)
 coembed = RunUMAP(coembed, dims = 1:15)
 
-# merge together cell labels
+# merge together Marques et al. cell labels
 new_ids = as.character(coembed@meta.data$cell_class)
 new_ids[new_ids == 'NFOL2'] = 'NFOL'
 new_ids[new_ids == 'NFOL1'] = 'NFOL'
@@ -110,6 +110,15 @@ vis_pred_boxplot = function(gene) {
   get_cell_ids = FetchData(object = coembed.g4, vars = gene)
   get_cell_ids = rownames(get_cell_ids)[get_cell_ids > ga_thr]
   
+  predictions = cell_class_pred %>%
+    pivot_longer(
+      .,
+      cols = c(colnames(cell_class_pred)[2]:colnames(cell_class_pred)[dim(cell_class_pred)[2]]),
+      names_to = "cell_id",
+      values_to = "pred_score"
+    ) %>%
+    dplyr::filter(!type == "max")
+  
   predictions = predictions %>% dplyr::filter(cell_id %in% get_cell_ids)
   
   plot = ggplot(predictions,
@@ -150,3 +159,25 @@ for(i in seq(length(marker_stat$marker))) {
     device = "pdf"
   )
 }
+
+# sorted_chroma = readRDS(file = "../results/Seurat/callpeaks_GFPsorted/GFPsorted.Rds")
+# 
+# x = sorted@meta.data
+# x = x %>% rownames_to_column(var = "cell_id")
+# x = x %>% dplyr::select(cell_id, pred_cell_type)
+# 
+# y = sorted_chroma@meta.data
+# y = y %>% rownames_to_column(var = "cell_id")
+# 
+# z = inner_join(x, y, by = c("cell_id" = "cell_id"))
+# 
+# sorted_chroma@meta.data = z
+# 
+# TilePlot(object = sorted_chroma, region = "Lin28a", 
+#          group.by = "pred_cell_type", tile.cells = 100, order.by = "total") + 
+#   scale_fill_gradient(low = "white", high = "black")
+
+
+
+
+

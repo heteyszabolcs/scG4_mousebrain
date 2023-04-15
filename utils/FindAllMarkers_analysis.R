@@ -24,6 +24,8 @@ marques_marker_genes = fread(marker_genes, header = FALSE)
 scrna = "../results/Seurat/scRNASeq_GSM4979874-75.rds"
 marques_scrna = "../results/Seurat/scRNASeq_GSE75330.rds"
 
+# G4 scCut&Tag marker regions
+# Wilcoxon rank sum based differential analysis
 markers = fread("../results/Seurat/callpeaks_unsorted/FindAllMarkers_output.tsv")
 markers = markers %>% rownames_to_column() %>% mutate(rowname = as.character(rowname))
 markers_annot = mm10_annotation(markers, seqname_col = "chr", start_col = "start", end_col = "end", feature_1 = "rowname", feature_2 = "rowname")
@@ -31,6 +33,72 @@ markers = markers %>% inner_join(., markers_annot, by = c("rowname" = "feature_1
   dplyr::select(chr, start = start.x, end = end.x, p_val, p_val_adj, avg_log2FC, cluster, distanceToTSS, gene = SYMBOL)
 write_tsv(markers, "../results/Seurat/callpeaks_unsorted/FindAllMarkers_output_annot.tsv")
 markers = markers %>% na.omit()
+
+# logistic regression based differential analysis
+markers_lr = fread("../results/Seurat/callpeaks_unsorted/FindAllMarkers_logreg_output.tsv")
+markers_lr = markers_lr %>% mutate(region = paste(chr, start, end, sep = "-"))
+markers_lr_annot = mm10_annotation(regions = markers_lr, start_col = "start", end_col = "end", seqname_col = "chr") %>% 
+  dplyr::filter(abs(distanceToTSS) < 3000) %>% dplyr::select(seqnames, start, end, gene_symbol = SYMBOL) %>% 
+  mutate(region = paste(seqnames, start, end, sep = "-"))
+markers_lr = markers_lr %>% inner_join(., markers_lr_annot, by = "region") %>% 
+  dplyr::select(region, gene_symbol, avg_log2FC, p_val, p_val_adj, cluster) %>% distinct_all()
+
+volc_input = markers_lr %>% mutate(group = case_when(
+  avg_log2FC > 0.1 & p_val_adj < 0.05 ~ "up",
+  avg_log2FC < -0.1 & p_val_adj < 0.05 ~ "down",
+  avg_log2FC >= -0.1 & avg_log2FC <= 0.1 ~ "unaltered"
+))
+volc_input = volc_input %>% mutate(sign_label = case_when(
+  avg_log2FC > 0.5 & p_val_adj < 0.005 ~ gene_symbol,
+  avg_log2FC < -0.5& p_val_adj < 0.005 ~ gene_symbol,
+  avg_log2FC >= -0.5 & avg_log2FC <= 0.5 ~ ""
+))
+labels = volc_input %>% pull(sign_label)
+
+# add color, size, alpha indications
+cols = c("up" = "#fc9272", "down" = "#a1d99b", "unaltered" = "grey")
+sizes = c("up" = 4, "down" = 4, "unaltered" = 2)
+alphas = c("up" = 1, "down" = 1, "unaltered" = 0.5)
+
+# plot
+ggplot_volc = volc_input %>%
+  ggplot(aes(x = avg_log2FC,
+             y = -log10(p_val_adj),
+             fill = as.character(cluster),    
+             size = group,
+             alpha = group)) +
+  ggrastr::geom_point_rast(shape = 21, # Specify shape and colour as fixed local parameters    
+                           colour = "black") +
+  geom_hline(yintercept = -log10(0.05),
+             linetype = "dashed") +
+  geom_vline(xintercept = c(-0.1, 0.1),
+             linetype = "dashed") +
+  #scale_fill_manual(values = cols) + # Modify point colour
+  scale_fill_brewer(palette = "Set3") + # Modify point colour
+  scale_size_manual(values = sizes) + # Modify point size
+  scale_alpha_manual(values = alphas) + # Modify point transparency
+  scale_x_continuous(breaks = c(seq(-3, 3, 0.5)),  	 
+                     limits = c(-3, 3)) +
+  labs(
+    title = "Differential G-quadruplexed regions (+/- 3 kb to TSS)",
+    x = "log2FoldChange",
+    y = "-log10 adj.p-value",
+    fill = " "
+  ) +
+  ylim(0, 15) +
+  guides(alpha = FALSE, size = FALSE, fill = guide_legend(override.aes = list(size = 5))) +
+  theme_minimal() +
+  theme(
+    text = element_text(size = 16),
+    legend.text = element_text(size = 14),
+    plot.title = element_text(size = 16, face = "bold"),
+    axis.text.x = element_text(size = 14, color = "black"),
+    axis.text.y = element_text(size = 14, color = "black"),
+    axis.title.x = element_text(size = 20, color = "black"),
+    axis.title.y = element_text(size = 20, color = "black")
+  ) +
+  geom_text_repel(label = labels, size = 6) # add labels
+ggplot_volc
 
 # Grubb's test output
 grubbs = fread(

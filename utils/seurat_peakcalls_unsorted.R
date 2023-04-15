@@ -260,10 +260,34 @@ g4 = FindClusters(object = g4,
 # removing cluster 5 - cluster 5 contains only 26 cells and in downstream steps showed some bias
 g4 = subset(x = g4, idents = 5, invert = TRUE)
 
-# Find all marker regions across clusters
+# Find all marker regions across clusters using Wilcoxon rank sum
 markers = FindAllMarkers(g4, only.pos = TRUE, thresh.use = 0.1)
 
-top.markers = markers %>% group_by(cluster) %>% top_n(wt = avg_log2FC,n = 5)
+# https://www.biorxiv.org/content/10.1101/258566v2 
+# logistic regression with total number of fragments as a latent variable
+markers_lr = FindAllMarkers(g4, test.use = "LR", latent.vars = "peak_region_fragments") 
+markers_lr = markers_lr %>% dplyr::filter(p_val_adj < 0.05)
+
+for(i in 1:length(rownames(markers_lr))) {
+  plot = CoveragePlot(
+    object = g4,
+    region = rownames(markers_lr)[i],
+    extend.upstream = 2000,
+    extend.downstream = 2000
+  )
+  
+  ggsave(
+    glue(
+      "../results/genome_browser/Figure_3/unsorted_brain/G4_marker_analysis/logreg_marker_region_{rownames(markers_lr)[i]}.pdf"
+    ),
+    plot = plot,
+    width = 10,
+    height = 10
+  )
+  
+}
+
+top.markers = markers %>% group_by(cluster) %>% top_n(wt = avg_log2FC, n = 5)
 DoHeatmap(object = g4, features = top.markers$gene,slot = 'data', raster = TRUE) + scale_fill_gradient(low = "white",  high = "#fc9272")
 
 # export marker regions
@@ -271,6 +295,9 @@ markers = markers %>% separate(gene, sep = "-", into = c("chr", "start", "end"),
 write_tsv(markers, glue("{result_folder}FindAllMarkers_output.tsv"))
 bed = markers %>% dplyr::select("chr", "start", "end")
 write_tsv(bed, glue("{result_folder}FindAllMarkers_output_bed.tsv"), col_names = FALSE)
+
+markers_lr = markers_lr %>% separate(gene, sep = "-", into = c("chr", "start", "end"), remove = TRUE)
+write_tsv(markers_lr, glue("{result_folder}FindAllMarkers_logreg_output.tsv"))
 
 dim = DimPlot(object = g4, label = TRUE, pt.size = 2, label.size = 7, repel = TRUE) + 
   NoLegend() +

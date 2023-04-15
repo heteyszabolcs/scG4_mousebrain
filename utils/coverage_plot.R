@@ -64,8 +64,6 @@ ggsave(
   height = 6
 )
 
-
-
 ## TilePlots
 # export
 ggsave(
@@ -77,7 +75,7 @@ ggsave(
 )
  
 TilePlot(object = mesc_mef, region = c("Cdhr3"), tile.cells = 100, order.by = "total") + 
-  scale_fill_gradient(low = "white", high = "#3182bd")
+  scale_fill_gradient(low = "white", high = "black")
 
 # export
 ggsave(
@@ -100,7 +98,7 @@ ggsave(
 )
 
 TilePlot(object = unsorted, region = "Myc", tile.cells = 100, order.by = "total") + 
-  scale_fill_gradient(low = "white", high = "#3182bd")
+  scale_fill_gradient(low = "white", high = "black")
 # export
 ggsave(
   "../results/Seurat/callpeaks_unsorted/TilePlot_Myc_common.pdf",
@@ -110,7 +108,8 @@ ggsave(
   device = "pdf"
 )
 
-TilePlot(object = mesc_mef, region = c("Lin28a"), tile.cells = 100, order.by = "total") + scale_fill_gradient(low = "white", high = "#3182bd")
+TilePlot(object = mesc_mef, region = c("Lin28a"), tile.cells = 100, order.by = "total") + 
+  scale_fill_gradient(low = "white", high = "black")
 # export
 ggsave(
   "../results/Seurat/callpeaks_mESC-MEF/TilePlot_Lin28a_cluster1_spec.pdf",
