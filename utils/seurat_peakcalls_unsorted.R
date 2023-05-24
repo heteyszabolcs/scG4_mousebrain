@@ -153,7 +153,12 @@ ggsave(
 g4_res0.1 = subset(x = g4_res0.1, idents = 2, invert = TRUE)
 
 # Find all marker regions across clusters
-markers_res0.1 = FindAllMarkers(g4_res0.1)
+# logistic regression with total number of fragments as a latent variable
+markers_lr_res0.1 = FindAllMarkers(g4_res0.1, test.use = "LR", latent.vars = "peak_region_fragments") 
+markers_lr_res0.1 = markers_lr_res0.1 %>% dplyr::filter(p_val_adj < 0.05)
+
+markers_lr_res0.1 = markers_lr_res0.1 %>% separate(gene, sep = "-", into = c("chr", "start", "end"), remove = TRUE)
+write_tsv(markers_lr_res0.1, glue("{result_folder}FindAllMarkers_logreg_output_res0.1.tsv"))
 
 meta_res0.1 = g4_res0.1@meta.data
 cluster0 = meta_res0.1 %>% dplyr::filter(seurat_clusters == 0) %>% rownames %>% length
@@ -196,6 +201,10 @@ DepthCor(g4) # 1st component highly correlate with sequencing depth
 g4 = RunUMAP(object = g4,
              reduction = 'lsi',
              dims = 2:30)
+
+# g4 = ScaleData(g4)
+# g4 = RunPCA(g4)
+# DimHeatmap(object = g4, dims = 2)
 
 #find doublets using DoubletFinder
 g4_doublet_test = Seurat::Read10X_h5(filename = glue("{cellranger_folder}filtered_peak_bc_matrix.h5"), use.names = T)

@@ -198,6 +198,7 @@ marques = RunUMAP(
   n.components = 2
 )
 
+
 #marques_markers = FindAllMarkers(marques, logfc.threshold = 0.20)
 
 ## marker genes are from Marques et al paper

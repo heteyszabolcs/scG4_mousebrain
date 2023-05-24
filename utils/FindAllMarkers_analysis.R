@@ -43,7 +43,10 @@ markers_lr_annot = mm10_annotation(regions = markers_lr, start_col = "start", en
 markers_lr = markers_lr %>% inner_join(., markers_lr_annot, by = "region") %>% 
   dplyr::select(region, gene_symbol, avg_log2FC, p_val, p_val_adj, cluster) %>% distinct_all()
 
-volc_input = markers_lr %>% mutate(group = case_when(
+volc_input = markers_lr %>% 
+  group_by(gene_symbol) %>%
+  dplyr::filter(avg_log2FC == max(abs(avg_log2FC), na.rm=TRUE)) %>% 
+  mutate(group = case_when(
   avg_log2FC > 0.1 & p_val_adj < 0.05 ~ "up",
   avg_log2FC < -0.1 & p_val_adj < 0.05 ~ "down",
   avg_log2FC >= -0.1 & avg_log2FC <= 0.1 ~ "unaltered"
@@ -53,6 +56,7 @@ volc_input = volc_input %>% mutate(sign_label = case_when(
   avg_log2FC < -0.5& p_val_adj < 0.005 ~ gene_symbol,
   avg_log2FC >= -0.5 & avg_log2FC <= 0.5 ~ ""
 ))
+  
 labels = volc_input %>% pull(sign_label)
 
 # add color, size, alpha indications
@@ -67,14 +71,14 @@ ggplot_volc = volc_input %>%
              fill = as.character(cluster),    
              size = group,
              alpha = group)) +
-  ggrastr::geom_point_rast(shape = 21, # Specify shape and colour as fixed local parameters    
+  geom_point(shape = 21, # Specify shape and colour as fixed local parameters    
                            colour = "black") +
   geom_hline(yintercept = -log10(0.05),
              linetype = "dashed") +
   geom_vline(xintercept = c(-0.1, 0.1),
              linetype = "dashed") +
   #scale_fill_manual(values = cols) + # Modify point colour
-  scale_fill_brewer(palette = "Set3") + # Modify point colour
+  scale_fill_manual(values = c("#bcbada", "#f07e70")) + # Modify point colour
   scale_size_manual(values = sizes) + # Modify point size
   scale_alpha_manual(values = alphas) + # Modify point transparency
   scale_x_continuous(breaks = c(seq(-3, 3, 0.5)),  	 
@@ -85,7 +89,7 @@ ggplot_volc = volc_input %>%
     y = "-log10 adj.p-value",
     fill = " "
   ) +
-  ylim(0, 15) +
+  ylim(0, 30) +
   guides(alpha = FALSE, size = FALSE, fill = guide_legend(override.aes = list(size = 5))) +
   theme_minimal() +
   theme(
@@ -97,680 +101,304 @@ ggplot_volc = volc_input %>%
     axis.title.x = element_text(size = 20, color = "black"),
     axis.title.y = element_text(size = 20, color = "black")
   ) +
-  geom_text_repel(label = labels, size = 6) # add labels
+  geom_text_repel(label = labels, size = 6, max.overlaps = 8) # add labels
 ggplot_volc
 
-# Grubb's test output
-grubbs = fread(
-  "../results/Seurat/callpeaks_unsorted/Grubbs_test-unique_G4_peaks_0.001_joined.tsv"
+ggsave(
+  glue("{result_folder}FindAllMarkers_volc_logreg.png"),
+  plot = last_plot(),
+  width = 7,
+  height = 5,
+  dpi = 300,
 )
 
-markers_sign = markers %>% dplyr::filter(abs(avg_log2FC) > 0.25 & p_val_adj < 0.05) %>% 
-  dplyr::filter(abs(distanceToTSS) < 3000)
-print(glue("Grubbs test found {as.character(length(unique(grubbs$gene)))} unique G4 peak"))
-grubbs = grubbs %>% dplyr::filter(abs(distanceToTSS) < 3000)
-print(glue("Grubbs test found {length(setdiff(grubbs$gene, markers_sign$gene))} unique promoter proximal G4 peak"))
-print(glue("Grubbs test found {length(intersect(grubbs$gene, markers_sign$gene))} common promoter proximal G4 peak"))
-print(glue("FindMarker analysis found {length(setdiff(markers_sign$gene, grubbs$gene))} unique promoter proximal G4 peak"))
-
-# filter and export to bed
-clusterwise = markers %>% dplyr::filter(abs(avg_log2FC) > 0.2 &
-                                          p_val_adj < 0.05)
-clusters = unique(clusterwise$cluster)
-for (i in clusters) {
-  subset = clusterwise %>% dplyr::filter(cluster == i) %>% dplyr::select(chr, start, end)
-  write_tsv(
-    subset,
-    glue(
-      "{result_folder}FindAllMarker_padj0.05_fc0.2_cluster_{i}.bed"
-    ),
-    col_names = FALSE
-  )
-}
-
-# export clusters to tsv
-for (i in clusters) {
-  subset = markers %>% dplyr::filter(cluster == i) %>%
-    dplyr::select(distanceToTSS, avg_log2FC, p_val_adj, distanceToTSS) %>%
-    dplyr::filter(abs(distanceToTSS) < 3000)
-  write_tsv(
-    subset,
-    glue("{result_folder}FindAllMarker_cluster_{i}_promoters.tsv"),
-    col_names = TRUE
-  )
-}
-
-# keep significant marker regions proximal to TSS
-markers = markers %>% dplyr::filter(abs(distanceToTSS) < 3000) %>%
-  dplyr::filter(p_val_adj < 0.001)
-print(glue("FindAllMarkers found {as.character(length(unique(markers$gene)))} promoter proximal G4 markers"))
-markers_grubbs_int = intersect(unique(markers$gene), unique(grubbs$gene))
-print(
-  glue(
-    "{as.character(length(markers_grubbs_int))} of {as.character(dim(grubbs)[1])} outliers have been found by Seurat"
-  )
+ggsave(
+  glue("{result_folder}FindAllMarkers_volc_logreg.pdf"),
+  device = "pdf",
+  plot = last_plot(),
+  width = 7,
+  height = 5,
+  dpi = 300,
 )
 
-markers_all = fread("../results/Seurat/callpeaks_unsorted/FindAllMarkers_output_annot.tsv")
+# assign expression levels
+scrna = readRDS(scrna)
+marques_scrna = readRDS(marques_scrna)
 
-markers_wide = pivot_wider(
-  markers,
-  names_from = cluster,
-  id_cols = "gene",
-  values_from = avg_log2FC,
-  values_fn = mean
-)
-row_names = markers_wide %>% pull("gene")
-markers_wide = markers_wide %>% dplyr::select(-"gene") %>% as.matrix
-rownames(markers_wide) = row_names
+# creating inputs for visualization
+marques_lognorm = as.data.frame(marques_scrna[["RNA"]]@data)
+summary(rowMeans(marques_lognorm))
+marques_lognorm_filt = marques_lognorm[c("Sfi1", "Rab39", "Relb", "Ell2", "1700113A16Rik"),]
+marques_fam178b = marques_lognorm["Fam178b-loc2",]
+rownames(marques_fam178b) = "log2_norm_expr"
 
-markers_wide[is.na(markers_wide)] = 0
+marques_bp_input = marques_lognorm_filt %>% t %>% as_tibble %>%
+  pivot_longer("Sfi1":"1700113A16Rik",
+               values_to = "log2_norm_expr",
+               names_to = "gene") %>% 
+  mutate(source = "Marques et al.")
 
-# G4_prox_marker_genes = marques_marker_genes$V1[which(marques_marker_genes$V1 %in% rownames(markers_wide))]
-# G4_prox_marker_genes = append(G4_prox_marker_genes, "Tcn2")
-# G4_prox_marker_genes_pos = which(rownames(markers_wide) %in% G4_prox_marker_genes)
+marques_fam178b = marques_fam178b %>% t %>% as_tibble %>%
+  mutate(source = "Marques et al.", gene = "Fam178b") %>% 
+  dplyr::filter(log2_norm_expr > 0)
 
-pdf(
-  file = glue("{result_folder}FindAllMarkers_hm_p0.001.pdf"),
-  width = 4,
-  height = 6
-)
-col_fun = colorRamp2(c(0, 2, 4), c("white", "#fec44f", "red"))
-hm = Heatmap(
-  markers_wide,
-  column_title = "marker regions, adj. p < 0.001",
-  row_title = "genes close to G4 (+/- 3 kb to TSS)",
-  name = "Avg logFC",
-  col = col_fun,
-  heatmap_legend_param = list(
-    at = c(0, 2, 4),
-    labels = c("< 0.25", "2", "4"),
-    legend_height = unit(2, "cm")
-  ),
-  #rect_gp = gpar(col = "black", lwd = 0.01),
-  show_column_dend = FALSE,
-  show_row_names = FALSE,
-  cluster_columns = FALSE,
-  cluster_rows = TRUE,
-  show_row_dend = FALSE,
-  heatmap_width = unit(5, "cm"),
-  heatmap_height = unit(13, "cm"),
-  row_names_gp = gpar(fontsize = 1),
-  column_names_gp = gpar(fontsize = 12),
-  column_names_rot = 0
-)
-hm
-dev.off()
+marques_means = rowMeans(marques_lognorm_filt)
+marques_means = tibble(source = "Marques et al.", gene = names(marques_means), 
+                       pseudobulked_mean_expr = round(marques_means, 3))
+order = marques_means %>% arrange(desc(pseudobulked_mean_expr)) %>% pull(gene)
 
-png(
-  file = glue("{result_folder}FindAllMarkers_hm_p0.001.png"),
-  width = 10,
-  height = 12,
-  units = "cm",
-  res = 300
-)
-print(hm)
-dev.off()
+bartosovic_lognorm = as.data.frame(scrna[["RNA"]]@data)
+summary(rowMeans(bartosovic_lognorm))
+bartosovic_lognorm_filt = bartosovic_lognorm[c("Sfi1", "Rab39", "Relb", "Ell2", "1700113A16Rik"),]
+bartosovic_fam178b = bartosovic_lognorm["Fam178b",]
+rownames(bartosovic_fam178b) = "log2_norm_expr"
 
-# integrate with scRNA-Seq data
-# GSE75330 (Marques et al.)
-marques = readRDS(marques_scrna)
-new_ids = as.character(marques@meta.data$cell_class)
-new_ids[new_ids == 'NFOL2'] = 'NFOL'
-new_ids[new_ids == 'NFOL1'] = 'NFOL'
-new_ids[new_ids == 'MFOL2'] = 'MFOL'
-new_ids[new_ids == 'MFOL1'] = 'MFOL'
-new_ids[new_ids == 'MOL1'] = 'MOL'
-new_ids[new_ids == 'MOL2'] = 'MOL'
-new_ids[new_ids == 'MOL3'] = 'MOL'
-new_ids[new_ids == 'MOL4'] = 'MOL'
-new_ids[new_ids == 'MOL5'] = 'MOL'
-new_ids[new_ids == 'MOL6'] = 'MOL'
-new_ids[new_ids == 'PPR'] = 'VLMC'
-marques@meta.data$merged_cell_class = new_ids
-# log normalized expression matrix
-norm = marques[["RNA"]]@data
+bartosovic_fam178b = bartosovic_fam178b %>% t %>% as_tibble %>%
+  mutate(source = "Bartosovic et al.", gene = "Fam178b")
 
-existing_gene_symbols = character()
-for (gene in markers$gene) {
-  if (gene %in% norm@Dimnames[[1]]) {
-    existing_gene_symbols = c(existing_gene_symbols, gene)
-  }
-}
+
+bartosovic_bp_input = bartosovic_lognorm_filt %>% t %>% as_tibble %>%
+  pivot_longer("Sfi1":"1700113A16Rik",
+               values_to = "log2_norm_expr",
+               names_to = "gene") %>% 
+  mutate(source = "Bartosovic et al.")
+
+# boxplot inputs
+bp_input = rbind(bartosovic_bp_input, marques_bp_input)
+bp_input = bp_input %>% dplyr::filter(log2_norm_expr > 0)
+
+fam178b_input = rbind(bartosovic_fam178b, marques_fam178b)
+
+# heatmap input (aggr. log2 norm. expression)
+bartosovic_means = rowMeans(bartosovic_lognorm_filt)
+bartosovic_means = tibble(source = "Bartosovic et al.", gene = names(bartosovic_means), 
+                       pseudobulked_mean_expr = round(bartosovic_means, 3))
+  
+
+means = rbind(bartosovic_means, marques_means)
+order = factor(means$gene, levels = order)
+
+# remove huge objects
+rm(scrna); rm(marques_scrna)
+rm(bartosovic_lognorm); rm(marques_lognorm)
 
 # heatmap
-ms = list()
-for (cluster in unique(marques@meta.data$merged_cell_class)) {
-  m = t(as.matrix(norm[existing_gene_symbols, ]))
-  cluster_barcodes = rownames(marques@meta.data[which(marques@meta.data$merged_cell_class == cluster),])
-  m = m[cluster_barcodes, ]
-  t = tibble(means = colMeans(m))
-  t = t %>%
-    mutate(gene_symbol = existing_gene_symbols) %>%
-    mutate(Seurat_cluster = as.character(cluster))
-  ms[[as.character(cluster)]] = t
-}
-ms = bind_rows(ms)
-ms = ms %>% distinct_all(., .keep_all = TRUE)
-ms = ms %>% pivot_wider(., names_from = "Seurat_cluster", values_from = "means")
+hm = ggplot(means, aes(x = order, y = source, fill = pseudobulked_mean_expr)) +
+  geom_tile(color = "black",
+            lwd = 0.5,
+            linetype = 1) +
+  scale_fill_gradient2(
+    low = "#9ecae1",
+    mid = "white",
+    high = "#fc9272",
+    midpoint = 0.17,
+    limits = c(0, 0.35)
+  ) +
+  theme_classic() +
+  xlab(label = "G4 enrichment in cluster 2, 3") +
+  ylab(label = "") +
+  labs(fill = "log2 norm. expr.") +
+  theme(
+    axis.line = element_blank(),
+    axis.text.x = element_text(
+      color = "black",
+      size = 13,
+      angle = 45,
+      hjust = 1,
+      vjust = 1
+    ), 
+    axis.text.y = element_text(color = "black", size = 10)
+  ) +
+  coord_fixed()
+print(hm)
 
-ms = ms %>% inner_join(., markers, by = c("gene_symbol" = "gene")) %>% dplyr::filter(abs(avg_log2FC) > 0.5) %>%
-  distinct(gene_symbol, .keep_all = TRUE)
-rows = ms$gene_symbol
-ms = ms %>% dplyr::select("MOL":"VLMC")
-ms = as.matrix(ms)
-rownames(ms) = rows
-
-pdf(
-  file = glue(
-    "{result_folder}heatmap_unsorted-marker_genes-scRNA_GSE75330.pdf"
-  ),
+ggsave(
+  glue("{result_folder}FindAllMarkers_hm_posmarkers.png"),
+  plot = last_plot(),
   width = 5,
-  height = 5
+  height = 3.5,
+  dpi = 300,
 )
-col_fun = colorRamp2(c(0, 1, 2), c("#9ecae1", "white", "#fc9272"))
-marques_hm = Heatmap(
-  ms,
-  column_title = "scRNA-Seq (Marques et al.) Seurat clusters",
-  row_title = "G4 marker genes (avg log2FC > 0.5)",
-  name = "norm. expr.",
-  clustering_method_rows = "complete",
-  col = col_fun,
-  #top_annotation = ha,
-  show_column_dend = TRUE,
-  #rect_gp = gpar(col = "black", lwd = 0.2),
-  cluster_columns = FALSE,
-  cluster_rows = TRUE,
-  show_row_dend = FALSE,
-  # heatmap_width = unit(12, "cm"),
-  # heatmap_height = unit(12, "cm"),
-  width = unit(3, "cm"),
-  height = unit(6, "cm"),
-  show_row_names = FALSE,
-  #row_names_gp = gpar(fontsize = 2),
-  column_names_gp = gpar(fontsize = 13),
-  column_names_rot = 90
+
+ggsave(
+  glue("{result_folder}FindAllMarkers_hm_posmarkers.pdf"),
+  device = "pdf",
+  plot = last_plot(),
+  width = 5,
+  height = 3.5,
+  dpi = 300,
 )
-marques_hm
-dev.off()
 
-### Volcano and scatterplot visualization
+# boxplot
+order = marques_means %>% arrange(desc(pseudobulked_mean_expr)) %>% pull(gene)
+order = factor(bp_input$gene, levels = order)
 
-# keep only those G4 markers that markers in one given Seurat cluster
-cluster_spec_markers = markers %>% distinct(gene, cluster, .keep_all = TRUE) %>%
-  group_by(gene) %>% dplyr::count(gene) %>% dplyr::filter(n == 1) %>% pull(gene) %>% unique
-cluster_spec_markers = markers %>%  dplyr::filter(gene %in% cluster_spec_markers)
-sign_g4_markers = cluster_spec_markers %>% pull(gene) %>% unique
+ggplot(bp_input, aes(x = order, y = log2_norm_expr)) +
+  #geom_boxplot(color = "black", outlier.shape = NA, outlier.stroke = NA, outlier.fill = NA) 
+  geom_jitter(aes(color = source), size = 1, alpha = 0.5) +
+  scale_color_manual(values = c("#bdbdbd", "#fec44f")) +
+  guides(alpha = FALSE, size = FALSE, color = guide_legend(override.aes = list(size = 5))) +
+  ylim(0, 3) +
+  labs(
+    title = "",
+    x = "",
+    y = "log2 norm. expr.",
+    color = "scRNA-Seq"
+  ) +
+  theme_classic() +
+  theme(
+    text = element_text(size = 9),
+    plot.title = element_text(size = 10),
+    axis.title.y = element_text(size = 12),
+    axis.text.x = element_text(size = 12, color = "black", angle = 45, vjust = 1, hjust = 1),
+    axis.text.y = element_text(size = 12, color = "black")
+  ) 
 
-## run FindAllMarkers on Marques scRNA-Seq object (default is wilcoxon test)
-# marques_markers = FindAllMarkers(marques,
-#                                  logfc.threshold = 0.2)
-# write_tsv(marques_markers,
-#           "../data/GSE75330/FindAllMarker_fc0.2_wilcox.tsv")
-marques_markers = read_tsv("../data/GSE75330/FindAllMarker_fc0.2_wilcox.tsv")
-marques_markers_filt = marques_markers %>% dplyr::filter(p_val_adj < 0.05, abs(avg_log2FC) > 2)
+ggsave(
+  glue("{result_folder}FindAllMarkers_jitter_posmarkers.png"),
+  plot = last_plot(),
+  width = 5,
+  height = 3.5,
+  dpi = 300,
+)
 
-# combine with our G4 marker genes
-all_markers = marques_markers_filt %>% inner_join(., cluster_spec_markers, by = c("gene" = "gene")) %>%
-  dplyr::select(
-    gene_name = gene,
-    scRNA_Seq_fc = avg_log2FC.x,
-    G4_fc = avg_log2FC.y,
-    scRNA_Seq_padj = p_val_adj.x,
-    G4_padj = p_val_adj.y,
-    scRNA_Seq_cluster = cluster.x,
-    G4_cluster = cluster.y
+ggsave(
+  glue("{result_folder}FindAllMarkers_jitter_posmarkers.pdf"),
+  device = "pdf",
+  plot = last_plot(),
+  width = 5,
+  height = 3.5,
+  dpi = 300,
+)
+
+ggplot(fam178b_input, aes(x = gene, y = log2_norm_expr)) +
+  #geom_boxplot(color = "black", outlier.shape = NA, outlier.stroke = NA, outlier.fill = NA) 
+  geom_jitter(aes(color = source), size = 1, alpha = 0.5) +
+  scale_color_manual(values = c("#bdbdbd", "#fec44f")) +
+  guides(alpha = FALSE, size = FALSE, color = guide_legend(override.aes = list(size = 5))) +
+  ylim(0, 3) +
+  labs(
+    title = "",
+    x = "",
+    y = "log2 norm. expr.",
+    color = "scRNA-Seq"
+  ) +
+  theme_classic() +
+  theme(
+    text = element_text(size = 9),
+    plot.title = element_text(size = 10),
+    axis.title.y = element_text(size = 12),
+    axis.text.x = element_text(size = 12, color = "black", angle = 45, vjust = 1, hjust = 1),
+    axis.text.y = element_text(size = 12, color = "black")
+  ) 
+
+ggsave(
+  glue("{result_folder}FindAllMarkers_jitter_Fam178b.png"),
+  plot = last_plot(),
+  width = 5,
+  height = 3.5,
+  dpi = 300,
+)
+
+ggsave(
+  glue("{result_folder}FindAllMarkers_jitter_Fam178b.pdf"),
+  device = "pdf",
+  plot = last_plot(),
+  width = 5,
+  height = 3.5,
+  dpi = 300,
+)
+
+
+# logistic regression based differential analysis
+markers_lr_res0.1 = fread("../results/Seurat/callpeaks_unsorted/FindAllMarkers_logreg_output_res0.1.tsv")
+markers_lr_res0.1 = markers_lr_res0.1 %>% mutate(region = paste(chr, start, end, sep = "-"))
+markers_lr_res0.1_annot = mm10_annotation(regions = markers_lr_res0.1, start_col = "start", end_col = "end", seqname_col = "chr") %>% 
+  dplyr::filter(abs(distanceToTSS) < 3000) %>% dplyr::select(seqnames, start, end, gene_symbol = SYMBOL) %>% 
+  mutate(region = paste(seqnames, start, end, sep = "-"))
+markers_lr_res0.1 = markers_lr_res0.1 %>% inner_join(., markers_lr_res0.1_annot, by = "region") %>% 
+  dplyr::select(region, gene_symbol, avg_log2FC, p_val, p_val_adj, cluster) %>% distinct_all()
+
+volc_input_res0.1 = markers_lr_res0.1 %>% 
+  group_by(gene_symbol) %>%
+  dplyr::filter(avg_log2FC == max(abs(avg_log2FC), na.rm=TRUE)) %>% 
+  mutate(group = case_when(
+    avg_log2FC > 0.1 & p_val_adj < 0.05 ~ "up",
+    avg_log2FC < -0.1 & p_val_adj < 0.05 ~ "down",
+    avg_log2FC >= -0.1 & avg_log2FC <= 0.1 ~ "unaltered",
+    TRUE ~ "non sign.")
   )
+volc_input_res0.1 = volc_input_res0.1 %>% mutate(sign_label = case_when(
+  avg_log2FC > 0.5 & p_val_adj < 0.005 ~ gene_symbol,
+  avg_log2FC < -0.5& p_val_adj < 0.005 ~ gene_symbol,
+  avg_log2FC >= -0.5 & avg_log2FC <= 0.5 ~ "",
+  TRUE ~ "non sign."
+))
 
-cluster_quant = all_markers %>% group_by(scRNA_Seq_cluster) %>% dplyr::count(scRNA_Seq_cluster)
+labels = volc_input_res0.1 %>% pull(sign_label)
 
-# volcano plots
-volcano = function(cluster, color = "black", title) {
-  # keyvalues = ifelse(
-  #   cluster$G4_cluster == 4, '#8bb0d1',
-  #   ifelse(cluster$G4_cluster == 5, '#f0b265',
-  #          '#b5db68'))
-  # keyvalues[is.na(keyvalues)] <- 'black'
-  # names(keyvalues)[keyvalues == '#8bb0d1'] <- '4'
-  # names(keyvalues)[keyvalues == '#f0b265'] <- '5'
-  # names(keyvalues)[keyvalues == '#b5db68'] <- '6'
-  
-  plot = EnhancedVolcano(
-    cluster,
-    lab = cluster$gene_name,
-    labSize = 4,
-    title = title,
-    pCutoff = 10e-25,
-    FCcutoff = 0.5,
-    colAlpha = 1,
-    legendLabels = c(" ", " ", " ", " "),
-    legendLabSize = 14,
-    legendIconSize = 0,
-    legendDropLevels = TRUE,
-    legendPosition = "right",
-    drawConnectors = TRUE,
-    max.overlaps = 100,
-    #colCustom = keyvalues,
-    x = 'G4_fc',
-    y = 'G4_padj',
-    subtitle = "",
-    col = c('grey', 'grey', 'grey', color)
-  )
-  return(print(plot))
-  
-}
+# plot
+ggplot_volc_res0.1 = volc_input_res0.1 %>%
+  ggplot(aes(x = avg_log2FC,
+             y = -log10(p_val_adj),
+             fill = as.character(cluster),    
+             size = group,
+             alpha = group)) +
+  geom_point(shape = 21, # Specify shape and colour as fixed local parameters    
+             colour = "black") +
+  geom_hline(yintercept = -log10(0.05),
+             linetype = "dashed") +
+  geom_vline(xintercept = c(-0.1, 0.1),
+             linetype = "dashed") +
+  #scale_fill_manual(values = cols) + # Modify point colour
+  scale_fill_manual(values = c("#bcbcbc", "#b1d689")) + # Modify point colour
+  scale_size_manual(values = sizes) + # Modify point size
+  scale_alpha_manual(values = alphas) + # Modify point transparency
+  scale_x_continuous(breaks = c(seq(-3, 3, 0.5)),  	 
+                     limits = c(-3, 3)) +
+  labs(
+    title = "Differential G-quadruplexed regions (+/- 3 kb to TSS)",
+    x = "log2FoldChange",
+    y = "-log10 adj.p-value",
+    fill = " "
+  ) +
+  ylim(0, 30) +
+  guides(alpha = FALSE, size = FALSE, fill = guide_legend(override.aes = list(size = 5))) +
+  theme_minimal() +
+  theme(
+    text = element_text(size = 16),
+    legend.text = element_text(size = 14),
+    plot.title = element_text(size = 16, face = "bold"),
+    axis.text.x = element_text(size = 14, color = "black"),
+    axis.text.y = element_text(size = 14, color = "black"),
+    axis.title.x = element_text(size = 20, color = "black"),
+    axis.title.y = element_text(size = 20, color = "black")
+  ) +
+  geom_text_repel(label = labels, size = 6, max.overlaps = 8) # add labels
+ggplot_volc_res0.1
 
-print(unique(all_markers$scRNA_Seq_cluster))
+ggsave(
+  glue("{result_folder}FindAllMarkers_volc_logreg_res0.1.png"),
+  plot = last_plot(),
+  width = 7,
+  height = 5,
+  dpi = 300,
+)
 
-# volcano plots of each Marques et al. scRNA-Seq cluster
-# pdf(
-#   file = glue("{result_folder}volcano_MOL-G4_fc.pdf"),
-#   width = 6,
-#   height = 6
-# )
-# volcano(
-#   all_markers %>% dplyr::filter(scRNA_Seq_cluster == "OPC" &
-#                                   G4_cluster == 2),
-#   color = "#f0b265",
-#   title = "MOL"
-# )
-# dev.off()
-# png(
-#   file = glue("{result_folder}volcano_MOL-G4_fc.png"),
-#   width = 12,
-#   height = 12,
-#   units = "cm",
-#   res = 300
-# )
-# volcano(
-#   all_markers %>% dplyr::filter(scRNA_Seq_cluster == "MOL" &
-#                                   G4_cluster == 5),
-#   color = "#f0b265",
-#   title = "MOL"
-# )
-# dev.off()
-# pdf(
-#   file = glue("{result_folder}volcano_MFOL-MOL-G4_fc.pdf"),
-#   width = 6,
-#   height = 6
-# )
-# volcano(
-#   all_markers %>% dplyr::filter(scRNA_Seq_cluster == "MFOL/MOL" &
-#                                   G4_cluster == 5),
-#   color = "#f0b265",
-#   title = "MFOL/MOL"
-# )
-# dev.off()
-# png(
-#   file = glue("{result_folder}volcano_MFOL-MOL-G4_fc.png"),
-#   width = 12,
-#   height = 12,
-#   units = "cm",
-#   res = 300
-# )
-# volcano(
-#   all_markers %>% dplyr::filter(scRNA_Seq_cluster == "MFOL/MOL" &
-#                                   G4_cluster == 5),
-#   color = "#f0b265",
-#   title = "MFOL/MOL"
-# )
-# dev.off()
-# pdf(
-#   file = glue("{result_folder}volcano_COP-G4_fc.pdf"),
-#   width = 6,
-#   height = 6
-# )
-# volcano(
-#   all_markers %>% dplyr::filter(scRNA_Seq_cluster == "COP" &
-#                                   G4_cluster == 5),
-#   color = "#f0b265",
-#   title = "COP"
-# )
-# dev.off()
-# png(
-#   file = glue("{result_folder}volcano_COP-G4_fc.png"),
-#   width = 12,
-#   height = 12,
-#   units = "cm",
-#   res = 300
-# )
-# volcano(
-#   all_markers %>% dplyr::filter(scRNA_Seq_cluster == "COP" &
-#                                   G4_cluster == 5),
-#   color = "#f0b265",
-#   title = "COP"
-# )
-# dev.off()
-# pdf(
-#   file = glue("{result_folder}volcano_VLMC-G4_fc.pdf"),
-#   width = 6,
-#   height = 6
-# )
-# volcano(
-#   all_markers %>% dplyr::filter(scRNA_Seq_cluster == "VLMC" &
-#                                   G4_cluster == 5),
-#   color = "#f0b265",
-#   title = "VLMC"
-# )
-# dev.off()
-# png(
-#   file = glue("{result_folder}volcano_VLMC-G4_fc.png"),
-#   width = 12,
-#   height = 12,
-#   units = "cm",
-#   res = 300
-# )
-# volcano(
-#   all_markers %>% dplyr::filter(scRNA_Seq_cluster == "VLMC" &
-#                                   G4_cluster == 5),
-#   color = "#f0b265",
-#   title = "VLMC"
-# )
-# dev.off()
-# pdf(
-#   file = glue("{result_folder}volcano_OPC-G4_fc.pdf"),
-#   width = 6,
-#   height = 6
-# )
-# volcano(
-#   all_markers %>% dplyr::filter(scRNA_Seq_cluster == "OPC" &
-#                                   G4_cluster == 5),
-#   color = "#f0b265",
-#   title = "OPC"
-# )
-# dev.off()
-# png(
-#   file = glue("{result_folder}volcano_OPC-G4_fc.png"),
-#   width = 12,
-#   height = 12,
-#   units = "cm",
-#   res = 300
-# )
-# volcano(
-#   all_markers %>% dplyr::filter(scRNA_Seq_cluster == "OPC" &
-#                                   G4_cluster == 5),
-#   color = "#f0b265",
-#   title = "OPC"
-# )
-# dev.off()
+ggsave(
+  glue("{result_folder}FindAllMarkers_volc_logreg_res0.1.pdf"),
+  device = "pdf",
+  plot = last_plot(),
+  width = 7,
+  height = 5,
+  dpi = 300,
+)
 
-# lower scRNA-Seq fold change thr and color by G4 Seurat clusters
-# marques_markers_filt = marques_markers %>% dplyr::filter(p_val_adj < 0.05, abs(avg_log2FC) > 1) %>%
-#   dplyr::filter(gene %in% sign_g4_markers)
-# 
-# all_markers = marques_markers_filt %>% inner_join(., markers, by = c("gene" = "Gene Name")) %>%
-#   dplyr::select(
-#     gene_name = gene,
-#     scRNA_Seq_fc = avg_log2FC.x,
-#     G4_fc = avg_log2FC.y,
-#     scRNA_Seq_padj = p_val_adj.x,
-#     G4_padj = p_val_adj.y,
-#     scRNA_Seq_cluster = cluster.x,
-#     G4_cluster = cluster.y
-#   )
-# 
-# keyvalues = ifelse(
-#   all_markers$G4_cluster == 4,
-#   '#8bb0d1',
-#   ifelse(
-#     all_markers$G4_cluster == 5,
-#     '#f0b265',
-#     ifelse(
-#       all_markers$G4_cluster == 6,
-#       '#b5db68',
-#       ifelse(
-#         all_markers$G4_cluster == 3,
-#         '#EB8073',
-#         ifelse(
-#           all_markers$G4_cluster == 2,
-#           '#BDB8D8',
-#           ifelse(
-#             all_markers$G4_cluster == 1,
-#             '#FDFFB2',
-#             ifelse(all_markers$G4_cluster == 0, '#99D1C4',
-#                    'grey')
-#           )
-#         )
-#       )
-#     )
-#   )
-# )
-# keyvalues[is.na(keyvalues)] <- 'grey'
-# names(keyvalues)[keyvalues == '#99D1C4'] <- '0'
-# names(keyvalues)[keyvalues == '#FDFFB2'] <- '1'
-# names(keyvalues)[keyvalues == '#BDB8D8'] <- '2'
-# names(keyvalues)[keyvalues == '#EB8073'] <- '3'
-# names(keyvalues)[keyvalues == '#8bb0d1'] <- '4'
-# names(keyvalues)[keyvalues == '#f0b265'] <- '5'
-# names(keyvalues)[keyvalues == '#b5db68'] <- '6'
-# 
-# # G4 fold change volcano
-# pdf(
-#   file = glue("{result_folder}volcano_full-G4_fc.pdf"),
-#   width = 6,
-#   height = 6
-# )
-# full_volc_g4 = EnhancedVolcano(
-#   all_markers,
-#   lab = all_markers$gene_name,
-#   labSize = 4,
-#   title = "|scRNA-Seq log2FC| > 1, adj. p. < 0.05" ,
-#   pCutoff = 10e-45,
-#   FCcutoff = 0.5,
-#   colAlpha = 1,
-#   selectLab = " ",
-#   legendLabels = c(" ", " ", " ", " "),
-#   legendLabSize = 14,
-#   legendIconSize = 5,
-#   legendDropLevels = FALSE,
-#   legendPosition = "right",
-#   drawConnectors = TRUE,
-#   max.overlaps = 100,
-#   
-#   colCustom = keyvalues,
-#   x = 'G4_fc',
-#   y = 'G4_padj',
-#   subtitle = "",
-#   col = c('grey', 'grey', 'grey', color)
-# )
-# full_volc_g4
-# dev.off()
-# 
-# png(
-#   file = glue("{result_folder}volcano_full-G4_fc.png"),
-#   width = 16,
-#   height = 12,
-#   units = "cm",
-#   res = 300
-# )
-# print(full_volc_g4)
-# dev.off()
-# 
-# # scRNA-Seq fold change volcano
-# pdf(
-#   file = glue("{result_folder}volcano_full-scRNA-Seq_fc.pdf"),
-#   width = 6,
-#   height = 6
-# )
-# full_volc_scrna = EnhancedVolcano(
-#   all_markers,
-#   lab = all_markers$gene_name,
-#   labSize = 4,
-#   title = "|scRNA-Seq log2FC| > 1, adj. p. < 0.05" ,
-#   pCutoff = 10e-45,
-#   FCcutoff = 1,
-#   colAlpha = 1,
-#   selectLab = " ",
-#   legendLabels = c(" ", " ", " ", " "),
-#   legendLabSize = 14,
-#   legendIconSize = 5,
-#   legendDropLevels = FALSE,
-#   legendPosition = "right",
-#   drawConnectors = TRUE,
-#   max.overlaps = 100,
-#   colCustom = keyvalues,
-#   x = 'scRNA_Seq_fc',
-#   y = 'scRNA_Seq_padj',
-#   subtitle = "",
-#   col = c('grey', 'grey', 'grey', color)
-# )
-# full_volc_scrna
-# dev.off()
-# 
-# png(
-#   file = glue("{result_folder}volcano_full-scRNA-Seq_fc.png"),
-#   width = 16,
-#   height = 12,
-#   units = "cm",
-#   res = 300
-# )
-# print(full_volc_scrna)
-# dev.off()
-# 
-# # scatterplot
-# all_markers = marques_markers %>% inner_join(., markers, by = c("gene" = "Gene Name")) %>%
-#   dplyr::select(
-#     gene_name = gene,
-#     scRNA_Seq_fc = avg_log2FC.x,
-#     G4_fc = avg_log2FC.y,
-#     scRNA_Seq_padj = p_val_adj.x,
-#     G4_padj = p_val_adj.y,
-#     scRNA_Seq_cluster = cluster.x,
-#     G4_cluster = cluster.y
-#   )
-# 
-# ggplot(all_markers, aes(
-#   x = scRNA_Seq_fc,
-#   y = G4_fc,
-#   color = factor(G4_cluster)
-# )) +
-#   geom_point(size = 2) +
-#   scale_color_brewer(palette = "Set3") +
-#   labs(
-#     title = "scRNA-Seq vs. G4 markers",
-#     x = "Marques et al. scRNA-Seq fold change",
-#     y = "G4 fold change",
-#     color = " "
-#   ) +
-#   theme_classic() +
-#   labs(color = "Seurat cluster") +
-#   theme(
-#     text = element_text(size = 14),
-#     plot.title = element_text(size = 14),
-#     axis.text.x = element_text(size = 12, color = "black"),
-#     axis.text.y = element_text(size = 12, color = "black")
-#   )
-# 
-# ggsave(
-#   plot = last_plot(),
-#   glue("{result_folder}FindMarker_anal-fc_scatterplot.pdf"),
-#   width = 6,
-#   height = 6
-# )
-# ggsave(
-#   plot = last_plot(),
-#   glue("{result_folder}FindMarker_anal-fc_scatterplot.png"),
-#   width = 6,
-#   height = 6,
-#   dpi = 300
-# )
-# 
-# ggplot(all_markers, aes(
-#   x = scRNA_Seq_fc,
-#   y = G4_fc,
-#   color = factor(scRNA_Seq_cluster)
-# )) +
-#   geom_point(size = 2) +
-#   scale_color_brewer(palette = "Set3") +
-#   labs(
-#     title = "scRNA-Seq vs. G4 markers",
-#     x = "Marques et al. scRNA-Seq fold change",
-#     y = "G4 fold change",
-#     color = " "
-#   ) +
-#   theme_classic() +
-#   labs(color = "cell type") +
-#   theme(
-#     text = element_text(size = 14),
-#     plot.title = element_text(size = 14),
-#     axis.text.x = element_text(size = 12, color = "black"),
-#     axis.text.y = element_text(size = 12, color = "black")
-#   )
-# 
-# ggsave(
-#   plot = last_plot(),
-#   glue("{result_folder}FindMarker_anal-fc_scatterplot2.pdf"),
-#   width = 6,
-#   height = 6
-# )
-# 
-# # GSE163484, GSE163485 (two replicates)
-# scrna = readRDS(scrna)
-# norm = scrna[["RNA"]]@data
-# 
-# existing_gene_symbols = character()
-# for (gene in markers$`Gene Name`) {
-#   if (gene %in% norm@Dimnames[[1]]) {
-#     existing_gene_symbols = c(existing_gene_symbols, gene)
-#   }
-# }
-# 
-# # heatmap
-# ms = list()
-# for (cluster in levels(unique(Idents(scrna)))) {
-#   m = t(as.matrix(norm[existing_gene_symbols, ]))
-#   cluster_barcodes = WhichCells(scrna, idents = cluster)
-#   m = m[cluster_barcodes, ]
-#   t = tibble(means = colMeans(m))
-#   t = t %>%
-#     mutate(gene_symbol = existing_gene_symbols) %>%
-#     mutate(Seurat_cluster = as.character(cluster))
-#   ms[[as.character(cluster)]] = t
-# }
-# ms = bind_rows(ms)
-# ms = ms %>% distinct_all(., .keep_all = TRUE)
-# ms = ms %>% pivot_wider(., names_from = "Seurat_cluster", values_from = "means")
-# 
-# ms = ms %>% inner_join(., markers, by = c("gene_symbol" = "Gene Name")) %>% dplyr::filter(abs(avg_log2FC) > 0.5) %>%
-#   distinct(gene_symbol, .keep_all = TRUE)
-# rows = ms$gene_symbol
-# ms = ms %>% relocate(.) %>% dplyr::select("0":"9")
-# ms = as.matrix(ms)
-# rownames(ms) = rows
-# 
-# pdf(
-#   file = glue(
-#     "{result_folder}heatmap_unsorted-marker_genes-scRNA_GSE163484-85.pdf"
-#   ),
-#   width = 5,
-#   height = 5
-# )
-# col_fun = colorRamp2(c(0, 0.5, 1), c("#9ecae1", "white", "#fc9272"))
-# bartosovic_hm = Heatmap(
-#   ms,
-#   column_title = "scRNA-Seq (Bartosovic et al.) Seurat clusters",
-#   row_title = "G4 marker genes (avg log2FC > 0.5)",
-#   name = "norm. expr.",
-#   clustering_method_rows = "complete",
-#   col = col_fun,
-#   #top_annotation = ha,
-#   show_column_dend = FALSE,
-#   #rect_gp = gpar(col = "black", lwd = 0.2),
-#   cluster_columns = TRUE,
-#   cluster_rows = TRUE,
-#   show_row_dend = FALSE,
-#   # heatmap_width = unit(12, "cm"),
-#   # heatmap_height = unit(12, "cm"),
-#   width = unit(7, "cm"),
-#   height = unit(7, "cm"),
-#   show_row_names = FALSE,
-#   #row_names_gp = gpar(fontsize = 2),
-#   column_names_gp = gpar(fontsize = 13),
-#   column_names_rot = 90
-# )
-# bartosovic_hm
-# dev.off()
-
-## run FindAllMarkers on Bartosovic scRNA-Seq object (default is wilcoxon test)
-#bartosovic_markers = FindAllMarkers(scrna, logfc.threshold = 0.2)
-#write_tsv(bartosovic_markers, "../data/GSE163484/FindAllMarker_fc0.2_wilcox.tsv")
+# analyse the whole genome not only the promoters
+markers_lr = fread("../results/Seurat/callpeaks_unsorted/FindAllMarkers_logreg_output.tsv")
+markers_lr = markers_lr %>% mutate(region = paste(chr, start, end, sep = "-"))
+markers_lr_annot = mm10_annotation(regions = markers_lr, start_col = "start", end_col = "end", seqname_col = "chr") %>% 
+  dplyr::select(seqnames, start, end, gene_symbol = SYMBOL) %>% 
+  mutate(region = paste(seqnames, start, end, sep = "-"))
+markers_lr = markers_lr %>% inner_join(., markers_lr_annot, by = "region") %>% 
+  dplyr::select(region, gene_symbol, avg_log2FC, p_val, p_val_adj, cluster) %>% distinct_all()

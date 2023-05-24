@@ -8,7 +8,7 @@ suppressPackageStartupMessages({
   library("GenomicRanges")
   library("wigglescout")
   library("plyranges")
-  library("ArchR")
+  #library("ArchR")
 })
 
 # export folder
@@ -139,9 +139,6 @@ get_signals = function(selected_cluster = "0") {
   
 }
 
-cl3_over_cm_enh = get_signals("3")
-cl5_over_cm_enh = get_signals("5")
-
 g4_gl_enh_quant = numeric()
 for (cluster in names(g4s_no_ol)) {
   ol = suppressWarnings(findOverlaps(g4_peaks[[cluster]], gl_enh, type = "any", minoverlap = 1))
@@ -164,8 +161,8 @@ cm_bar = tibble(
   geom_bar(stat = "identity",
            width = 0.5,
            color = "black") +
-  scale_fill_brewer(palette = "YlOrRd") +
-  scale_y_continuous(limits = c(0, 5), breaks = seq(0, 5, 1)) +
+  scale_fill_brewer(palette = "Set3") +
+  scale_y_continuous(limits = c(0, 3), breaks = seq(0, 5, 1)) +
   labs(
     title = expression(paste(
       "G4 overlaps with active enhancers of ",
@@ -179,7 +176,8 @@ cm_bar = tibble(
   theme(
     text = element_text(size = 20),
     plot.title = element_text(size = 15),
-    axis.text.x = element_text(size = 13, color = "black")
+    axis.text.x = element_text(size = 13, color = "black"),
+    axis.text.y = element_text(size = 13, color = "black")
   )
 cm_bar
 

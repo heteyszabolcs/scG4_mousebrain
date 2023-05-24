@@ -108,8 +108,9 @@ ggsave(
   device = "pdf"
 )
 
-TilePlot(object = mesc_mef, region = c("Lin28a"), tile.cells = 100, order.by = "total") + 
-  scale_fill_gradient(low = "white", high = "black")
+TilePlot(object = mesc_mef, region = c("Cdhr3"), tile.cells = 125, order.by = "total") + 
+  scale_fill_gradientn(colours = c("white","black","black"))
+
 # export
 ggsave(
   "../results/Seurat/callpeaks_mESC-MEF/TilePlot_Lin28a_cluster1_spec.pdf",
