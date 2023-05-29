@@ -12,6 +12,8 @@ suppressPackageStartupMessages({
   library("Matrix")
 })
 
+set.seed(5)
+
 # helper function
 source("C:/Szabolcs/Karolinska/Data/scripts/annotation.R")
 
@@ -52,8 +54,8 @@ volc_input = markers_lr %>%
   avg_log2FC >= -0.1 & avg_log2FC <= 0.1 ~ "unaltered"
 ))
 volc_input = volc_input %>% mutate(sign_label = case_when(
-  avg_log2FC > 0.5 & p_val_adj < 0.005 ~ gene_symbol,
-  avg_log2FC < -0.5& p_val_adj < 0.005 ~ gene_symbol,
+  avg_log2FC > 0.5 & p_val_adj < 0.05 ~ gene_symbol,
+  avg_log2FC < -0.5& p_val_adj < 0.05 ~ gene_symbol,
   avg_log2FC >= -0.5 & avg_log2FC <= 0.5 ~ ""
 ))
   
@@ -81,8 +83,8 @@ ggplot_volc = volc_input %>%
   scale_fill_manual(values = c("#bcbada", "#f07e70")) + # Modify point colour
   scale_size_manual(values = sizes) + # Modify point size
   scale_alpha_manual(values = alphas) + # Modify point transparency
-  scale_x_continuous(breaks = c(seq(-3, 3, 0.5)),  	 
-                     limits = c(-3, 3)) +
+  scale_x_continuous(breaks = c(seq(-4.5, 4.5, 1)),  	 
+                     limits = c(-4.5, 4.5)) +
   labs(
     title = "Differential G-quadruplexed regions (+/- 3 kb to TSS)",
     x = "log2FoldChange",
@@ -125,22 +127,27 @@ ggsave(
 scrna = readRDS(scrna)
 marques_scrna = readRDS(marques_scrna)
 
+interesting_genes = volc_input %>% arrange(desc(abs(avg_log2FC))) %>% pull(gene_symbol)
+interesting_genes = interesting_genes[1:10]
+
 # creating inputs for visualization
 marques_lognorm = as.data.frame(marques_scrna[["RNA"]]@data)
 summary(rowMeans(marques_lognorm))
-marques_lognorm_filt = marques_lognorm[c("Sfi1", "Rab39", "Relb", "Ell2", "1700113A16Rik"),]
-marques_fam178b = marques_lognorm["Fam178b-loc2",]
-rownames(marques_fam178b) = "log2_norm_expr"
 
+valid = c()
+for(gene in interesting_genes) {
+  if(gene %in% rownames(marques_lognorm)) {
+    valid = c(valid, gene)
+  }
+}
+interesting_genes = valid[1:5]
+
+marques_lognorm_filt = marques_lognorm[interesting_genes,]
 marques_bp_input = marques_lognorm_filt %>% t %>% as_tibble %>%
-  pivot_longer("Sfi1":"1700113A16Rik",
+  pivot_longer(interesting_genes[1]:interesting_genes[5],
                values_to = "log2_norm_expr",
                names_to = "gene") %>% 
   mutate(source = "Marques et al.")
-
-marques_fam178b = marques_fam178b %>% t %>% as_tibble %>%
-  mutate(source = "Marques et al.", gene = "Fam178b") %>% 
-  dplyr::filter(log2_norm_expr > 0)
 
 marques_means = rowMeans(marques_lognorm_filt)
 marques_means = tibble(source = "Marques et al.", gene = names(marques_means), 
@@ -149,16 +156,10 @@ order = marques_means %>% arrange(desc(pseudobulked_mean_expr)) %>% pull(gene)
 
 bartosovic_lognorm = as.data.frame(scrna[["RNA"]]@data)
 summary(rowMeans(bartosovic_lognorm))
-bartosovic_lognorm_filt = bartosovic_lognorm[c("Sfi1", "Rab39", "Relb", "Ell2", "1700113A16Rik"),]
-bartosovic_fam178b = bartosovic_lognorm["Fam178b",]
-rownames(bartosovic_fam178b) = "log2_norm_expr"
-
-bartosovic_fam178b = bartosovic_fam178b %>% t %>% as_tibble %>%
-  mutate(source = "Bartosovic et al.", gene = "Fam178b")
-
+bartosovic_lognorm_filt = bartosovic_lognorm[interesting_genes,]
 
 bartosovic_bp_input = bartosovic_lognorm_filt %>% t %>% as_tibble %>%
-  pivot_longer("Sfi1":"1700113A16Rik",
+  pivot_longer(interesting_genes[1]:interesting_genes[5],
                values_to = "log2_norm_expr",
                names_to = "gene") %>% 
   mutate(source = "Bartosovic et al.")
@@ -167,7 +168,6 @@ bartosovic_bp_input = bartosovic_lognorm_filt %>% t %>% as_tibble %>%
 bp_input = rbind(bartosovic_bp_input, marques_bp_input)
 bp_input = bp_input %>% dplyr::filter(log2_norm_expr > 0)
 
-fam178b_input = rbind(bartosovic_fam178b, marques_fam178b)
 
 # heatmap input (aggr. log2 norm. expression)
 bartosovic_means = rowMeans(bartosovic_lognorm_filt)
@@ -191,11 +191,11 @@ hm = ggplot(means, aes(x = order, y = source, fill = pseudobulked_mean_expr)) +
     low = "#9ecae1",
     mid = "white",
     high = "#fc9272",
-    midpoint = 0.17,
-    limits = c(0, 0.35)
+    midpoint = 1,
+    limits = c(0, 2)
   ) +
   theme_classic() +
-  xlab(label = "G4 enrichment in cluster 2, 3") +
+  xlab(label = "G4 enrichment") +
   ylab(label = "") +
   labs(fill = "log2 norm. expr.") +
   theme(
@@ -270,45 +270,6 @@ ggsave(
   height = 3.5,
   dpi = 300,
 )
-
-ggplot(fam178b_input, aes(x = gene, y = log2_norm_expr)) +
-  #geom_boxplot(color = "black", outlier.shape = NA, outlier.stroke = NA, outlier.fill = NA) 
-  geom_jitter(aes(color = source), size = 1, alpha = 0.5) +
-  scale_color_manual(values = c("#bdbdbd", "#fec44f")) +
-  guides(alpha = FALSE, size = FALSE, color = guide_legend(override.aes = list(size = 5))) +
-  ylim(0, 3) +
-  labs(
-    title = "",
-    x = "",
-    y = "log2 norm. expr.",
-    color = "scRNA-Seq"
-  ) +
-  theme_classic() +
-  theme(
-    text = element_text(size = 9),
-    plot.title = element_text(size = 10),
-    axis.title.y = element_text(size = 12),
-    axis.text.x = element_text(size = 12, color = "black", angle = 45, vjust = 1, hjust = 1),
-    axis.text.y = element_text(size = 12, color = "black")
-  ) 
-
-ggsave(
-  glue("{result_folder}FindAllMarkers_jitter_Fam178b.png"),
-  plot = last_plot(),
-  width = 5,
-  height = 3.5,
-  dpi = 300,
-)
-
-ggsave(
-  glue("{result_folder}FindAllMarkers_jitter_Fam178b.pdf"),
-  device = "pdf",
-  plot = last_plot(),
-  width = 5,
-  height = 3.5,
-  dpi = 300,
-)
-
 
 # logistic regression based differential analysis
 markers_lr_res0.1 = fread("../results/Seurat/callpeaks_unsorted/FindAllMarkers_logreg_output_res0.1.tsv")

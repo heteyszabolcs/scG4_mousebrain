@@ -8,11 +8,22 @@ suppressPackageStartupMessages({
   library("GenomicRanges")
   library("wigglescout")
   library("plyranges")
+  library("wigglescout")
+  library("ggpubr")
+  library("ggrastr")
   #library("ArchR")
 })
 
 # export folder
 result_folder = "../results/GenomicRanges/unsorted_outputs/"
+# cluster-spec bigwigs
+bigwigs = "../results/Seurat/callpeaks_unsorted/cluster_bigwigs/"
+
+# Marek K27ac
+k27ac = "../data/Marek_data/histone_scCnT/k27ac/possorted_RPGC.bigwig"
+# mESC K27ac
+mesc_k27ac = "../data/bw/Martire2019_ESC_H33WT_H3K27ac.bw"
+mesc_k27ac2 = "../data/bw/Creyghton_et_al_mESC_H3K27ac.bw"
 
 # data
 g4_peaks = "../results/Seurat/callpeaks_unsorted/peak_sets/peaks_per_clusters.bed"
@@ -24,7 +35,8 @@ ltrs = "../data/bed/RepMasker_lt200bp.LTRIS2.bed"
 # G4 peak set
 g4_peaks = fread(g4_peaks)
 g4_peaks$V7 = "G4"
-# enhancers
+
+# enhancer sets (mESC Cruz-Molina and Glaser)
 cm_enh = fread(cm_enh)
 cm_enh$V6 = "Cruz-Molina_active_enh"
 cm_enh = GRanges(
@@ -36,6 +48,57 @@ cm_enh = GRanges(
   )
 )
 
+# Marek's brain K27ac at mESC Cruz-Molina enhancers
+k27ac_enh = bw_loci(k27ac, loci = cm_enh)
+k27ac_enh = as_tibble(k27ac_enh)
+k27ac_enh = k27ac_enh %>% dplyr::filter(possorted_RPGC > quantile(k27ac_enh$possorted_RPGC, 0.75))
+k27ac_enh$type = "Cruz-Molina_active_enh"
+k27ac_enh = GRanges(
+  seqnames = k27ac_enh$seqnames,
+  ranges = IRanges(
+    start = k27ac_enh$start,
+    end = k27ac_enh$end,
+    names = k27ac_enh$type
+  )
+)
+
+# mESC K27ac
+mesc_k27ac_enh = bw_loci(mesc_k27ac, loci = cm_enh)
+mesc_k27ac_enh = as_tibble(mesc_k27ac_enh)
+mesc_k27ac_enh = mesc_k27ac_enh %>%
+  na.omit()
+mesc_k27ac_enh = mesc_k27ac_enh %>%
+  dplyr::filter(
+    Martire2019_ESC_H33WT_H3K27ac > quantile(mesc_k27ac_enh$Martire2019_ESC_H33WT_H3K27ac, 0.75)
+  )
+mesc_k27ac_enh$type = "Martire_active_enh"
+mesc_k27ac_enh = GRanges(
+  seqnames = mesc_k27ac_enh$seqnames,
+  ranges = IRanges(
+    start = mesc_k27ac_enh$start,
+    end = mesc_k27ac_enh$end,
+    names = mesc_k27ac_enh$type
+  )
+)
+
+mesc_k27ac_enh2 = bw_loci(mesc_k27ac2, loci = cm_enh)
+mesc_k27ac_enh2 = as_tibble(mesc_k27ac_enh2)
+mesc_k27ac_enh2 = mesc_k27ac_enh2 %>%
+  na.omit()
+mesc_k27ac_enh2 = mesc_k27ac_enh2 %>% dplyr::filter(
+  Creyghton_et_al_mESC_H3K27ac > quantile(mesc_k27ac_enh2$Creyghton_et_al_mESC_H3K27ac, 0.75)
+)
+mesc_k27ac_enh2$type = "Creyghton_active_enh"
+mesc_k27ac_enh2 = GRanges(
+  seqnames = mesc_k27ac_enh2$seqnames,
+  ranges = IRanges(
+    start = mesc_k27ac_enh2$start,
+    end = mesc_k27ac_enh2$end,
+    names = mesc_k27ac_enh2$type
+  )
+)
+
+# Glaser et al enhancer set
 gl_enh = fread(gl_enh)
 gl_enh$V6 = "Glaser_active_enh"
 gl_enh = GRanges(
@@ -45,6 +108,179 @@ gl_enh = GRanges(
     end = gl_enh$V3,
     names = gl_enh$V6
   )
+)
+
+# wigglescout analysis
+scatter_function = function(bigwig) {
+  p = plot_bw_bins_scatter(
+    x = glue("{bigwigs}{bigwig}"),
+    y = k27ac,
+    genome = "mm10",
+    selection = k27ac_enh,
+    verbose = FALSE
+  ) +
+    ggrastr::geom_point_rast(color = "#636363") +
+    labs(
+      title = bigwig,
+      x = "G4",
+      y = "H3K27ac (Bartosovic et al.)",
+      color = ""
+    ) +
+    xlim(0,30) +
+    ylim(0,30) +
+    theme_classic() +
+    theme(
+      text = element_text(size = 20),
+      plot.title = element_text(size = 15),
+      axis.text.x = element_text(size = 15, color = "black"),
+      axis.text.y = element_text(size = 15, color = "black")
+    ) + stat_cor(
+      method = "pearson",
+      label.x = 15,
+      label.y = 20,
+      size = 5,
+      p.accuracy = 0.001
+    )
+  p = rasterize(p, layers='Point', dpi=100)
+  return(p)
+}
+
+bigwig_samples = list.files(bigwigs, full.names = TRUE)
+plot_input = bw_loci(bigwig_samples, loci = k27ac_enh)
+plot_input = as_tibble(plot_input)
+plot_input_res0.8 = plot_input %>% 
+  dplyr::select(seqnames, start, end, "0" = X0, "1" = X1, "2" = X2, "3" = X3, "4" = X4, "0 - oligodendr" = X0_res0.1_oligo, "1 - misc. brain" = X1_res0.1_brain) %>% 
+  pivot_longer("0":"1 - misc. brain", names_to = "cluster", values_to = "G4") %>% 
+  dplyr::filter(cluster != "0 - oligodendr") %>% 
+  dplyr::filter(cluster != "1 - misc. brain") 
+
+plot_input_res0.8 = plot_input_res0.8 %>% mutate(k27ac_source = "Bartosovic et al.")
+
+mesc_plot_input = bw_loci(bigwig_samples, loci = mesc_k27ac_enh)
+mesc_plot_input = as_tibble(mesc_plot_input)
+mesc_plot_input_res0.8 = mesc_plot_input %>% 
+  dplyr::select(seqnames, start, end, "0" = X0, "1" = X1, "2" = X2, "3" = X3, "4" = X4, "0 - oligodendr" = X0_res0.1_oligo, "1 - misc. brain" = X1_res0.1_brain) %>% 
+  pivot_longer("0":"1 - misc. brain", names_to = "cluster", values_to = "G4") %>% 
+  dplyr::filter(cluster != "0 - oligodendr") %>% 
+  dplyr::filter(cluster != "1 - misc. brain") 
+
+mesc_plot_input_res0.8 = mesc_plot_input_res0.8 %>% mutate(k27ac_source = "Martier et al.")
+
+mesc_plot_input2 = bw_loci(bigwig_samples, loci = mesc_k27ac_enh2)
+mesc_plot_input2 = as_tibble(mesc_plot_input)
+mesc_plot_input_res0.8_2 = mesc_plot_input2 %>% 
+  dplyr::select(seqnames, start, end, "0" = X0, "1" = X1, "2" = X2, "3" = X3, "4" = X4, "0 - oligodendr" = X0_res0.1_oligo, "1 - misc. brain" = X1_res0.1_brain) %>% 
+  pivot_longer("0":"1 - misc. brain", names_to = "cluster", values_to = "G4") %>% 
+  dplyr::filter(cluster != "0 - oligodendr") %>% 
+  dplyr::filter(cluster != "1 - misc. brain") 
+
+mesc_plot_input_res0.8_2 = mesc_plot_input_res0.8_2 %>% mutate(k27ac_source = "Creyghton et al.")
+
+plot_input = rbind(mesc_plot_input_res0.8, mesc_plot_input_res0.8_2, plot_input_res0.8) 
+plot_input = plot_input %>% dplyr::filter(G4 > 0)
+
+order = plot_input_res0.8 %>% group_by(cluster) %>% summarise(mean = mean(G4)) %>% arrange(desc(mean)) %>% pull(cluster) 
+order = factor(plot_input$cluster, levels = order)
+
+grouped_jitter1 = ggplot(plot_input, aes(x = order, y = G4, color = k27ac_source)) +
+  #geom_boxplot(outlier.shape = NA) +
+  geom_point(position=position_jitterdodge(jitter.width = 0.15, dodge.width = 0.5), alpha = 1, pch = 19) +
+  scale_color_manual(values = c("#bdbdbd", "#fec44f", "#9ecae1")) +
+  ylim(0, 200) +
+  labs(
+    title = "",
+    x = "",
+    y = "G4 signal",
+    color = "H3K27ac"
+  ) +
+  theme_classic() +
+  theme(
+    text = element_text(size = 9),
+    plot.title = element_text(size = 10),
+    axis.text.x = element_text(size = 15, color = "black"),
+    axis.title.y = element_text(size = 15, color = "black"),
+    axis.text.y = element_text(size = 15, color = "black")
+  ) + stat_compare_means(aes(group = k27ac_source), label = "p.signif")
+grouped_jitter1
+grouped_jitter1 = rasterize(grouped_jitter1, layers='Point', dpi=300)
+
+ggsave(
+  glue("{result_folder}CM_enhancers-G4s_over_high_K27ac.png"),
+  plot = grouped_jitter1,
+  width = 8,
+  height = 5,
+  dpi = 300,
+)
+
+ggsave(
+  glue("{result_folder}CM_enhancers-G4s_over_high_K27ac.pdf"),
+  plot = grouped_jitter1,
+  device = "pdf",
+  width = 8,
+  height = 5,
+  dpi = 300,
+)
+
+order = plot_input_res0.8 %>% group_by(cluster) %>% summarise(mean = mean(G4)) %>% arrange(desc(mean)) %>% pull(cluster) 
+order = factor(plot_input_res0.8$cluster, levels = order)
+
+jitter1 = ggplot(plot_input_res0.8, aes(x = order, y = G4)) +
+ geom_jitter(color = "#bdbdbd") +
+  ylim(0, 200) +
+  labs(
+    title = "Cruz-Molina et al. enhancers with high K27ac in mouse brain",
+    x = "",
+    y = "G4 signal"
+  ) +
+  theme_classic() +
+  theme(
+    text = element_text(size = 5),
+    plot.title = element_text(size = 10),
+    axis.text.x = element_text(size = 15, color = "black"),
+    axis.title.y = element_text(size = 15, color = "black"),
+    axis.text.y = element_text(size = 15, color = "black")
+  ) + stat_compare_means(label = "p.signif")
+jitter1
+jitter1 = rasterize(jitter1, layers='Point', dpi=300)
+
+ggsave(
+  glue("{result_folder}CM_enhancers-G4s_over_high_Bartosovic_K27ac.png"),
+  plot = jitter1,
+  width = 8,
+  height = 5,
+  dpi = 300,
+)
+
+ggsave(
+  glue("{result_folder}CM_enhancers-G4s_over_high_Bartosovic_K27ac.pdf"),
+  plot = jitter1,
+  device = "pdf",
+  width = 8,
+  height = 5,
+  dpi = 300,
+)
+
+
+bigwig_samples = c("0.bw", "1.bw", "2.bw", "3.bw", "4.bw")
+scatters = lapply(bigwig_samples, scatter_function)
+scatters = ggarrange(plotlist = scatters)
+scatters
+
+ggsave(
+  glue("{result_folder}CM_enhancers-K27ac_scatters.png"),
+  plot = scatters,
+  width = 12,
+  height = 8,
+  dpi = 300,
+)
+
+ggsave(
+  glue("{result_folder}CM_enhancers-K27ac_scatters.pdf"),
+  plot = scatters,
+  device = "pdf",
+  width = 12,
+  height = 8,
+  dpi = 300,
 )
 
 # G4 length distributions
@@ -97,11 +333,19 @@ for (cluster in names(g4s_no_ol)) {
   g4_cm_enh_quant = c(g4_cm_enh_quant, length(ol))
 }
 
+# query: g4_peaks
+# subject: enhancers with Marek K27ac signal
+g4_k27ac_cm_enh_quant = numeric()
+for (cluster in names(g4s_no_ol)) {
+  ol = suppressWarnings(findOverlaps(g4_peaks[[cluster]], k27ac_enh, type = "any", minoverlap = 1))
+  g4_k27ac_cm_enh_quant = c(g4_k27ac_cm_enh_quant, length(ol))
+}
+
 get_signals = function(selected_cluster = "0") {
   require("wigglescout")
-  cl_cm_ol = suppressWarnings(subsetByOverlaps(g4_peaks[[selected_cluster]], cm_enh, type = "any", minoverlap = 1))
+  cl_cm_ol = suppressWarnings(subsetByOverlaps(g4_peaks[[selected_cluster]], k27ac_enh, type = "any", minoverlap = 1))
   cl_cm_ol = as.tibble(cl_cm_ol)
-  cl_cm_ol = suppressWarnings(subsetByOverlaps(g4_peaks[[selected_cluster]], cm_enh, type = "any", minoverlap = 1))
+  cl_cm_ol = suppressWarnings(subsetByOverlaps(g4_peaks[[selected_cluster]], k27ac_enh, type = "any", minoverlap = 1))
   cl_cm_ol = as.tibble(cl_cm_ol)
   
   bigwigs = c(
@@ -110,8 +354,7 @@ get_signals = function(selected_cluster = "0") {
     "../results/Seurat/callpeaks_unsorted/cluster_bigwigs/2.bw",
     "../results/Seurat/callpeaks_unsorted/cluster_bigwigs/3.bw",
     "../results/Seurat/callpeaks_unsorted/cluster_bigwigs/4.bw",
-    "../results/Seurat/callpeaks_unsorted/cluster_bigwigs/5.bw",
-    "../data/bw/Martire2019_ESC_H33WT_H3K27ac.bw"
+    k27ac
   )
   
   bed = cl_cm_ol[, 1:3]
@@ -139,6 +382,9 @@ get_signals = function(selected_cluster = "0") {
   
 }
 
+# get signals test
+cl_0_spec = get_signals()
+
 g4_gl_enh_quant = numeric()
 for (cluster in names(g4s_no_ol)) {
   ol = suppressWarnings(findOverlaps(g4_peaks[[cluster]], gl_enh, type = "any", minoverlap = 1))
@@ -147,7 +393,7 @@ for (cluster in names(g4s_no_ol)) {
 
 clusters = c("0", "1", "2", "3", "4")
 cm_bar = tibble(
-  overlap = g4_cm_enh_quant,
+  overlap = g4_k27ac_cm_enh_quant,
   peak_count = sapply(clusters, function(x) length(g4_peaks[[which(names(g4_peaks) == x)]])),
   enhancer_ratio = (overlap / peak_count) * 100,
   cluster = names(g4s_no_ol),
@@ -182,7 +428,7 @@ cm_bar = tibble(
 cm_bar
 
 cm_bar_input = tibble(
-  overlap = g4_cm_enh_quant,
+  overlap = g4_k27ac_cm_enh_quant,
   peak_count = sapply(clusters, function(x) length(g4_peaks[[which(names(g4_peaks) == x)]])),
   enhancer_ratio = (overlap / peak_count) * 100,
   cluster = names(g4s_no_ol),

@@ -14,7 +14,6 @@ suppressPackageStartupMessages({
   library("DoubletFinder")
 })
 
-
 set.seed(5)
 
 # Cellranger-ATAC folder
@@ -268,6 +267,7 @@ g4 = FindClusters(object = g4,
 
 # removing cluster 5 - cluster 5 contains only 26 cells and in downstream steps showed some bias
 g4 = subset(x = g4, idents = 5, invert = TRUE)
+g4 = subset(x = g4, idents = 6, invert = TRUE)
 
 # Find all marker regions across clusters using Wilcoxon rank sum
 markers = FindAllMarkers(g4, only.pos = TRUE, thresh.use = 0.1)
