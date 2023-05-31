@@ -1,3 +1,4 @@
+print("Load R packages")
 # packages
 suppressPackageStartupMessages({
   library("Seurat")
@@ -23,25 +24,42 @@ suppressPackageStartupMessages({
 
 set.seed(5)
 
+# Marques et al. (2016) scRNA-Seq count table - GSE75330
+GSE75330_Marques = "/proj/snic2020-6-3/SZABOLCS/LTRIS2_BRG1_H33_and_G4s/data/GSE75330/GSE75330_Marques_et_al_mol_counts2.tab"
+GSE75330_Marques_annotation =  "/proj/snic2020-6-3/SZABOLCS/LTRIS2_BRG1_H33_and_G4s/data/GSE75330/Marques2016annotation.rds"
+
+# create parser object
+parser = ArgumentParser()
+
+parser$add_argument("-w", "--workdir", type = "character",
+                    help = "path of working dir")
+parser$add_argument("-s", "--seurat_object", type = "character",
+                    help = "path to processed scG4 Seurat object with clusters")
+
+args = parser$parse_args()
+
+# add Seurat path
+g4 = args$seurat_object
+# open Seurat object
+g4 = readRDS(g4)
+# add working directory
+workdir = args$workdir
+
+# make folders for outputs
+system(paste0("mkdir -p ", workdir, "/plots"))
+system(paste0("mkdir -p ", workdir, "/outputs"))
+
 # G4 - scRNA data integration
 # main source: 
 # https://github.com/Castelo-Branco-lab/scCut-Tag_2020/blob/master/notebooks/integration/integration_H3K4me3_marques.Rmd
-
-# path to result folder
-result_folder = "../results/Seurat/callpeaks_GFPsorted/"
-
-# Seurat object (brain unsorted / brain GFP sorted)
-unsorted = readRDS(file = "../results/Seurat/callpeaks_unsorted/unsorted.Rds")
-unsorted_res0.1 = readRDS(file = "../results/Seurat/callpeaks_unsorted/unsorted_res0.1.Rds")
-sorted = readRDS(file = "../results/Seurat/callpeaks_GFPsorted/GFPsorted.Rds")
-
 # Marques et al. oligo scRNA data
+print("Load scRNA-Seq data of Marques et al. 2016")
 rna = read.table(
-  "../data/GSE75330/GSE75330_Marques_et_al_mol_counts2.tab",
+  GSE75330_Marques,
   stringsAsFactors = FALSE,
   header = FALSE
 )
-annot = readRDS(file = "../data/GSE75330/Marques2016annotation.rds")
+annot = readRDS(file = GSE75330_Marques_annotation)
 
 colnames(rna) = gsub("-", "_", sub('-', '', gsub("C1-", "", rna[1,])))
 rna = rna[-1,]
@@ -56,6 +74,8 @@ rna = CreateSeuratObject(counts = rna,
                          assay = 'RNA')
 
 # Seurat workflow
+print("Seurat workflow on Marques et al. 2016 data")
+
 all.genes = rownames(rna)
 rna = NormalizeData(rna,
                     normalization.method = "LogNormalize",
@@ -78,7 +98,7 @@ new_ids[new_ids == 'MOL5'] = 'MOL'
 new_ids[new_ids == 'MOL6'] = 'MOL'
 rna@meta.data$merged_cell_class = new_ids
 
-p1 = DimPlot(sorted,
+p1 = DimPlot(g4,
              pt.size = 2,
              label.size = 7,
              repel = TRUE,
@@ -116,25 +136,18 @@ p2 = DimPlot(
 rna@active.ident = rna$cell_class
 
 # export scRNA Seurat object
-saveRDS(rna, glue("../results/Seurat/scRNASeq_GSE75330.rds"))
+saveRDS(rna, glue("{workdir}/outputs/scRNA_Seq_Marques_et_el.Rds"))
 
-#markers = FindAllMarkers(rna)
-markers = read_tsv("../results/Seurat/scRNA-Seq_Marques_et_al-FindAllMarkers_output.tsv")
-markers.pos = markers[markers$p_val < 0.05 &
-                        markers$avg_log2FC > 0.5,]
-
-# write_tsv(markers,
-#           "../results/Seurat/scRNA-Seq_Marques_et_al-FindAllMarkers_output.tsv")
-
-DefaultAssay(sorted) = "GA"
+# set assays
+DefaultAssay(g4) = "GA"
 DefaultAssay(rna) = "RNA"
 
-common.genes = intersect(rownames(rna), rownames(sorted))
+common.genes = intersect(rownames(rna), rownames(g4))
 
 # anchor identification between G4 scCnT and scRNA-Seq data sets
 transfer.anchors = FindTransferAnchors(
   reference = rna,
-  query = sorted,
+  query = g4,
   reduction = 'cca',
   query.assay = 'GA',
   reference.assay = 'RNA',
@@ -143,11 +156,11 @@ transfer.anchors = FindTransferAnchors(
 )
 
 # extract anchor matrix of AnchorSet object
-g4_anchor_matrix = as_tibble(transfer.anchors@anchors)
-g4_anchor_matrix = g4_anchor_matrix %>%
-  mutate(anchor1_barcode = colnames(rna@assays$RNA@counts)[g4_anchor_matrix$cell1]) %>%
-  mutate(anchor2_barcode = colnames(sorted@assays$GA@counts)[g4_anchor_matrix$cell2])
-write_tsv(g4_anchor_matrix, glue("{result_folder}sorted_anchor_matrix.tsv"))
+anchor_matrix = as_tibble(transfer.anchors@anchors)
+anchor_matrix = anchor_matrix %>%
+  mutate(anchor1_barcode = colnames(rna@assays$RNA@counts)[anchor_matrix$cell1]) %>%
+  mutate(anchor2_barcode = colnames(g4@assays$GA@counts)[anchor_matrix$cell2])
+write_tsv(anchor_matrix, glue("{workdir}/outputs/anchor_matrix.tsv"))
 
 genes.use = VariableFeatures(rna)
 refdata = GetAssayData(rna, assay = "RNA", slot = "data")[genes.use, ]
@@ -157,7 +170,7 @@ refdata = GetAssayData(rna, assay = "RNA", slot = "data")[genes.use, ]
 imputation = TransferData(
   anchorset = transfer.anchors,
   refdata = refdata,
-  weight.reduction = sorted[["lsi"]],
+  weight.reduction = g4[["lsi"]],
   dims = 1:50,
   prediction.assay = TRUE
 )
@@ -166,7 +179,7 @@ imputation = TransferData(
 cell_class_pred = TransferData(
   anchorset = transfer.anchors,
   refdata = rna@meta.data$merged_cell_class,
-  weight.reduction = sorted[["lsi"]],
+  weight.reduction = g4[["lsi"]],
   dims = 1:50,
   prediction.assay = TRUE
 )
@@ -178,25 +191,25 @@ predicted_labels = predicted_labels %>% pivot_longer(., cols = "AAACGAAAGAAGCCGT
                                                      names_to = "cell_id", values_to = "pred_max_score")
 predicted_labels = predicted_labels %>% group_by(cell_id) %>% dplyr::slice(which.max(pred_max_score))
 
-sorted_meta = sorted@meta.data
-sorted_meta = sorted_meta %>% mutate(rownames_to_column(., var = "barcode")) %>% 
+g4_meta = g4@meta.data
+g4_meta = g4_meta %>% mutate(rownames_to_column(., var = "barcode")) %>% 
   inner_join(., predicted_labels, by = c("barcode" = "cell_id")) 
-barcodes = sorted_meta %>% pull(barcode)
-sorted_meta = sorted_meta %>% dplyr::select(-barcode)
-rownames(sorted_meta) = barcodes
-sorted@meta.data = sorted_meta
+barcodes = g4_meta %>% pull(barcode)
+g4_meta = g4_meta %>% dplyr::select(-barcode)
+rownames(g4_meta) = barcodes
+g4@meta.data = g4_meta
 
 # export G4 object with predicted labels
-saveRDS(cell_class_pred, glue("{result_folder}sorted_cell_label_preds.Rds"))
+saveRDS(cell_class_pred, glue("{workdir}/outputs/g4_cell_label_preds.Rds"))
 
 # visualizing predctions
 # UMAP
-pred_umap = DimPlot(sorted,
-             pt.size = 2,
-             label.size = 7,
-             repel = TRUE,
-             raster = TRUE,
-             group.by = "pred_cell_type") +
+pred_umap = DimPlot(g4,
+                    pt.size = 2,
+                    label.size = 7,
+                    repel = TRUE,
+                    raster = TRUE,
+                    group.by = "pred_cell_type") +
   scale_color_brewer(palette = "Set3") +
   xlim(-15, 15) +
   ylim(-15, 15) +
@@ -210,7 +223,7 @@ pred_umap = DimPlot(sorted,
 pred_umap
 
 ggsave(
-  glue("{result_folder}predicted_labels_UMAP.pdf"),
+  glue("{workdir}/plots/predicted_labels_UMAP.pdf"),
   plot = pred_umap,
   width = 13,
   height = 10,
@@ -222,7 +235,7 @@ predictions = as.matrix(cell_class_pred@data)
 predictions = predictions[rownames(predictions) != "max",]
 col_fun = colorRamp2(c(0, 0.5, 1), c("#421654", "#458f8a", "#f0e527"))
 pdf(
-  file = glue("{result_folder}predicton_score_heatmap.pdf"),
+  file = glue("{workdir}/plots/predicton_score_heatmap.pdf"),
   width = 8,
   height = 6
 )
@@ -254,8 +267,8 @@ predictions = as.data.frame(predictions)
 predictions$types = types
 predictions_long = predictions %>% pivot_longer(., cols = c("AAACGAAAGAAGCCGT-1":"TTTGTGTTCTCGCGTT-1"),
                                                 names_to = "cell_id", values_to = "pred_score")
-meta = as_tibble(sorted@meta.data)
-meta = meta %>% mutate(cell_id = rownames(sorted@meta.data))
+meta = as_tibble(g4@meta.data)
+meta = meta %>% mutate(cell_id = rownames(g4@meta.data))
 meta = predictions_long %>% inner_join(., meta, by = "cell_id")
 
 pred_boxplots = lapply(types, function(x) {
@@ -285,23 +298,23 @@ pred_boxplots = lapply(types, function(x) {
 pred_boxplots = ggarrange(plotlist = pred_boxplots)
 
 ggsave(
-  glue("{result_folder}predicton_score_boxplots.pdf"),
+  glue("{workdir}/plots/predicton_score_boxplots.pdf"),
   plot = pred_boxplots,
   width = 10,
   height = 7,
   device = "pdf"
 )
 
-sorted[['RNA']] = imputation
-saveRDS(sorted, glue("{result_folder}sorted_int_Marques.Rds"))
+g4[['RNA']] = imputation
+saveRDS(g4, glue("{workdir}/outputs/G4_Marques_scRNA_integration.Rds"))
 
 # coembedding G4 and Marques et al. scRNA-Seq
-sorted = readRDS(glue("{result_folder}sorted_int_Marques.Rds"))
+g4 = readRDS(glue("{workdir}/outputs/G4_Marques_scRNA_integration.Rds"))
 
 rna@meta.data$data_type = "scRNA-Seq (Marques et al.)"
-sorted@meta.data$data_type = "sorted G4 scCut&Tag"
+g4@meta.data$data_type = "G4 scCut&Tag"
 
-coembed = merge(x = rna, y = sorted)
+coembed = merge(x = rna, y = g4)
 
 coembed = ScaleData(coembed, features = genes.use, do.scale = FALSE)
 coembed = RunPCA(coembed, features = genes.use, verbose = FALSE)
@@ -352,7 +365,7 @@ create_expr_feature_plot = function(marker_gene) {
 
 create_g4_feature_plot = function(marker_gene) {
   # keep G4 scCut&Tag part of coembedding
-  coembed.g4 = coembed[,coembed$data_type == "sorted G4 scCut&Tag"]
+  coembed.g4 = coembed[,coembed$data_type == "G4 scCut&Tag"]
   
   # feature plot
   plot = FeaturePlot(
@@ -378,7 +391,7 @@ create_g4_feature_plot = function(marker_gene) {
 
 # pull gene symbol with the highest avg_log2FC score per cluster 
 get_best_marker = function(cell_type) {
-  coembed.g4 = coembed[,coembed$data_type == "sorted G4 scCut&Tag"]
+  coembed.g4 = coembed[,coembed$data_type == "G4 scCut&Tag"]
   marker = markers %>% dplyr::filter(str_detect(cluster, cell_type)) %>%
     arrange(avg_log2FC) %>% top_n(n = 1, wt = avg_log2FC) %>% pull(gene)
   
@@ -397,7 +410,7 @@ get_best_marker = function(cell_type) {
 
 get_underexpr_marker = function(cell_type) {
   print(cell_type)
-  coembed.g4 = coembed[,coembed$data_type == "sorted G4 scCut&Tag"]
+  coembed.g4 = coembed[,coembed$data_type == "G4 scCut&Tag"]
   marker = markers %>% dplyr::filter(str_detect(cluster, cell_type)) %>%
     arrange(avg_log2FC) %>% top_n(n = -1, wt = avg_log2FC) %>% pull(gene)
   
@@ -425,7 +438,7 @@ expr_feature_plots = lapply(best_marques_markers, create_expr_feature_plot)
 expr_feature_plots = ggarrange(plotlist = expr_feature_plots)
 
 ggsave(
-  glue("{result_folder}G4_Feature_plots_Marques_markers.pdf"),
+  glue("{workdir}/plots/G4_Feature_plots_Marques_markers.pdf"),
   plot = g4_feature_plots,
   width = 10,
   height = 7,
@@ -433,7 +446,7 @@ ggsave(
 )
 
 ggsave(
-  glue("{result_folder}expr_Feature_plots_Marques_markers.pdf"),
+  glue("{workdir}/plots/expr_Feature_plots_Marques_markers.pdf"),
   plot = expr_feature_plots,
   width = 10,
   height = 7,
@@ -446,7 +459,7 @@ expr_feature_plots = lapply(underexpr_marques_markers, create_expr_feature_plot)
 expr_feature_plots = ggarrange(plotlist = expr_feature_plots)
 
 ggsave(
-  glue("{result_folder}G4_Feature_plots_Marques_neg_markers.pdf"),
+  glue("{workdir}/plots/G4_Feature_plots_Marques_neg_markers.pdf"),
   plot = g4_feature_plots,
   width = 10,
   height = 7,
@@ -454,7 +467,7 @@ ggsave(
 )
 
 ggsave(
-  glue("{result_folder}expr_Feature_plots_Marques_neg_markers.pdf"),
+  glue("{workdir}/plots/expr_Feature_plots_Marques_neg_markers.pdf"),
   plot = expr_feature_plots,
   width = 10,
   height = 7,
@@ -481,7 +494,7 @@ expr_violins
 
 g4_violins = lapply(best_marques_markers, function(x)
   VlnPlot(
-    object = unsorted_res0.1[, unsorted_res0.1$seurat_clusters != "2"],
+    object = g4,
     features = x,
     raster = TRUE,
     log = FALSE,
@@ -492,20 +505,20 @@ g4_violins = lapply(best_marques_markers, function(x)
     xlab(" ") +
     ylim(0, 0.00005) +
     guides(legend = "none", fill = "none") +
-  stat_compare_means(label.y = 4e-05, label.x = 1.2, size = 3) +
-  stat_compare_means(
-    label = "p.signif",
-    method = "t.test",
-    ref.group = ".all.",
-    label.y = 50
-  ))
+    stat_compare_means(label.y = 4e-05, label.x = 1.2, size = 3) +
+    stat_compare_means(
+      label = "p.signif",
+      method = "t.test",
+      ref.group = ".all.",
+      label.y = 50
+    ))
 
 
 g4_violins = ggarrange(plotlist = g4_violins)
 g4_violins
 
 ggsave(
-  glue("{result_folder}G4_Violin_plots_Marques_markers.pdf"),
+  glue("{workdir}/plots/G4_Violin_plots_Marques_markers.pdf"),
   plot = g4_violins,
   width = 10,
   height = 7,
@@ -513,7 +526,7 @@ ggsave(
 )
 
 ggsave(
-  glue("{result_folder}expr_Violin_plots_Marques_markers.pdf"),
+  glue("{workdir}/plots/expr_Violin_plots_Marques_markers.pdf"),
   plot = expr_violins,
   width = 8,
   height = 6,
@@ -522,45 +535,17 @@ ggsave(
 
 # heatmap of expression markers
 hm = DoHeatmap(rna, features = best_marques_markers,
-          group.by = "merged_cell_class", raster = FALSE) +
+               group.by = "merged_cell_class", raster = FALSE) +
   scale_fill_gradientn(colors = c("#0d0a1e", "#c44a46", "#eef07a")) +
   theme(
     axis.text.y = element_text(size = 18, color = "black")
   ) + NoLegend()
 
 ggsave(
-  glue("{result_folder}expr_heatmap_Marques_markers.pdf"),
+  glue("{workdir}/plots/expr_heatmap_Marques_markers.pdf"),
   plot = hm,
   width = 10,
   height = 7
-)
-
-sorted_cluster2 = subset(sorted, subset = seurat_clusters == 2)
-sorted_cluster2 = as.matrix(sorted_cluster2@assays$GA@counts)
-most_var_cluster2 = rownames(sorted_cluster2)[order(rowMeans(sorted_cluster2), decreasing = TRUE)][1:200]
-most_var_cluster2 = markers %>% dplyr::filter(gene %in% most_var_cluster2) %>% 
-  dplyr::filter(avg_log2FC > 0) %>% mutate(cluster_aggr = ifelse(str_detect(cluster, "NFOL"), "NFOL", cluster)) %>% 
-  mutate(cluster_aggr = ifelse(str_detect(cluster, "MFOL"), "MFOL", cluster_aggr)) %>% 
-  mutate(cluster_aggr = ifelse(str_detect(cluster, "MOL"), "MOL", cluster_aggr)) %>% 
-  group_by(cluster_aggr) %>% summarise(cluster_n = n())
-
-bars = ggplot(data = most_var_cluster2, aes(y = cluster_n, x = reorder(cluster_aggr, -cluster_n))) +
-  geom_bar(stat = "identity", fill = "steelblue", color = "black") +
-  theme_minimal() +
-  labs(title = "GFP+ Seurat cluster 2",
-       x = " ",
-       y = "# of positive expr. marker") +
-  theme(
-    text = element_text(size = 20),
-    plot.title = element_text(size = 15),
-    axis.text.x = element_text(size = 15, color = "black"))
-bars
-
-ggsave(
-  glue("{result_folder}Seurat_cl2-quant_of_pos_markers.pdf"),
-  plot = bars,
-  width = 7,
-  height = 5
 )
 
 ## UMAP dimension plots
@@ -608,7 +593,7 @@ coembed_cells2 = DimPlot(
   NoLegend() + NoAxes()
 
 ggsave(
-  glue("{result_folder}Seurat_Marques_celltypes.pdf"),
+  glue("{workdir}/plots/Seurat_Marques_celltypes.pdf"),
   plot = coembed_cells2,
   width = 10,
   height = 10,
@@ -677,7 +662,7 @@ coembed_experiments = DimPlot(
 coembed@meta.data$seurat_clusters[is.na(coembed@meta.data$seurat_clusters)] = "scRNA-Seq"
 
 ggsave(
-  glue("{result_folder}Seurat_Marques_integration_datatypes.pdf"),
+  glue("{workdir}/plots/Seurat_Marques_integration_datatypes.pdf"),
   plot = coembed_experiments,
   width = 13,
   height = 10,
@@ -691,7 +676,6 @@ cols = c(
   "2" = "#bdbdbd",
   "3" = "#bdbdbd",
   "4" = "#bdbdbd"
-  # "6" = "#bdbdbd"
 )
 
 coembed_cluster0 = DimPlot(
@@ -718,7 +702,7 @@ coembed_cluster0 = DimPlot(
   NoAxes()
 
 ggsave(
-  glue("{result_folder}Seurat_Marques_integration_cl0.pdf"),
+  glue("{workdir}/plots/Seurat_Marques_integration_cl0.pdf"),
   plot = coembed_cluster0,
   width = 10,
   height = 10,
@@ -732,8 +716,6 @@ cols = c(
   "2" = "#bdbdbd",
   "3" = "#bdbdbd",
   "4" = "#bdbdbd"
-  # "5" = "#bdbdbd",
-  # "6" = "#bdbdbd"
 )
 
 coembed_cluster1 = DimPlot(
@@ -760,7 +742,7 @@ coembed_cluster1 = DimPlot(
   NoAxes()
 
 ggsave(
-  glue("{result_folder}Seurat_Marques_integration_cl1.pdf"),
+  glue("{workdir}/plots/Seurat_Marques_integration_cl1.pdf"),
   plot = coembed_cluster1,
   width = 10,
   height = 10,
@@ -774,8 +756,6 @@ cols = c(
   "2" = "#de2d26",
   "3" = "#bdbdbd",
   "4" = "#bdbdbd"
-  # "5" = "#bdbdbd",
-  # "6" = "#bdbdbd"
 )
 
 coembed_cluster2 = DimPlot(
@@ -802,7 +782,7 @@ coembed_cluster2 = DimPlot(
   NoAxes()
 
 ggsave(
-  glue("{result_folder}Seurat_Marques_integration_cl2.pdf"),
+  glue("{workdir}/plots/Seurat_Marques_integration_cl2.pdf"),
   plot = coembed_cluster2,
   width = 10,
   height = 10,
@@ -816,8 +796,6 @@ cols = c(
   "2" = "#bdbdbd",
   "3" = "#de2d26",
   "4" = "#bdbdbd")
-  # "5" = "#bdbdbd",
-  # "6" = "#bdbdbd"
 
 
 coembed_cluster3 = DimPlot(
@@ -844,45 +822,51 @@ coembed_cluster3 = DimPlot(
   NoAxes()
 
 ggsave(
-  glue("{result_folder}Seurat_Marques_integration_cl3.pdf"),
+  glue("{workdir}/plots/Seurat_Marques_integration_cl3.pdf"),
   plot = coembed_cluster3,
   width = 10,
   height = 10,
   device = "pdf"
 )
 
-cols = c(
-  "scRNA-Seq" = "#bdbdbd",
-  "0" = "#bdbdbd",
-  "1" = "#bdbdbd",
-  "2" = "#bdbdbd",
-  "3" = "#bdbdbd",
-  "4" = "#de2d26")
-  # "5" = "#bdbdbd",
-  # "6" = "#bdbdbd"
-
-coembed_cluster4 = DimPlot(
-  coembed,
-  pt.size = 1,
-  label.size = 7,
-  group.by = 'seurat_clusters',
-  repel = TRUE,
-  order = "4",
-  raster = TRUE
-) +
-  xlim(-15, 15) +
-  ylim(-15, 15) +
-  scale_colour_manual(values = cols,
-                      breaks = "4",
-                      labels = "cluster 4") +
-  ggtitle(" ") +
-  theme(
-    text = element_text(size = 25),
-    plot.title = element_text(size = 20),
-    axis.text.x = element_text(size = 25, color = "black"),
-    axis.text.y = element_text(size = 25, color = "black")
-  ) +
-  NoAxes()
+# cols = c(
+#   "scRNA-Seq" = "#bdbdbd",
+#   "0" = "#bdbdbd",
+#   "1" = "#bdbdbd",
+#   "2" = "#bdbdbd",
+#   "3" = "#bdbdbd",
+#   "4" = "#de2d26")
+# 
+# coembed_cluster4 = DimPlot(
+#   coembed,
+#   pt.size = 1,
+#   label.size = 7,
+#   group.by = 'seurat_clusters',
+#   repel = TRUE,
+#   order = "4",
+#   raster = TRUE
+# ) +
+#   xlim(-15, 15) +
+#   ylim(-15, 15) +
+#   scale_colour_manual(values = cols,
+#                       breaks = "4",
+#                       labels = "cluster 4") +
+#   ggtitle(" ") +
+#   theme(
+#     text = element_text(size = 25),
+#     plot.title = element_text(size = 20),
+#     axis.text.x = element_text(size = 25, color = "black"),
+#     axis.text.y = element_text(size = 25, color = "black")
+#   ) +
+#   NoAxes()
+# 
+# ggsave(
+#   glue("{workdir}/plots/Seurat_Marques_integration_cl4.pdf"),
+#   plot = coembed_cluster4,
+#   width = 10,
+#   height = 10,
+#   device = "pdf"
+# )
 
 clusters = plot_grid(
   coembed_cluster0,
@@ -890,11 +874,11 @@ clusters = plot_grid(
   coembed_cluster2,
   coembed_cluster3,
   ncol = 2,
-  nrow = 2
+  nrow = 3
 )
 
 ggsave(
-  glue("{result_folder}Seurat_Marques_integration_cl_all.pdf"),
+  glue("{workdir}/plots/Seurat_Marques_integration_cl_all.pdf"),
   plot = clusters,
   width = 10,
   height = 10,
@@ -902,7 +886,7 @@ ggsave(
 )
 
 ggsave(
-  glue("{result_folder}Seurat_Marques_integration_cl_all.png"),
+  glue("{workdir}/plots/Seurat_Marques_integration_cl_all.png"),
   plot = clusters,
   width = 10,
   height = 10,
@@ -913,7 +897,7 @@ coembed_ps = coembed_cells + coembed_gfp + coembed_clusters + coembed_experiment
 coembed_ps
 
 ggsave(
-  glue("{result_folder}Seurat_Marques_coembeds.pdf"),
+  glue("{workdir}/plots/Seurat_Marques_coembeds.pdf"),
   plot = coembed_ps,
   width = 16,
   height = 6,
@@ -924,7 +908,7 @@ coembed_ps = coembed_cells + coembed_clusters
 coembed_ps
 
 ggsave(
-  glue("{result_folder}Seurat_Marques_coembeds.pdf"),
+  glue("{workdir}/plots/Seurat_Marques_coembeds.pdf"),
   plot = coembed_ps,
   width = 12,
   height = 6,
@@ -939,7 +923,7 @@ umaps = plot_grid(p1,
                   nrow = 2)
 
 ggsave(
-  glue("{result_folder}Seurat_sorted_Marques_UMAPs.png"),
+  glue("{workdir}/plots/Seurat_Marques_UMAPs.png"),
   plot = umaps,
   width = 12,
   height = 12,
@@ -947,7 +931,7 @@ ggsave(
 )
 
 ggsave(
-  glue("{result_folder}Seurat_sorted_Marques_UMAPs.pdf"),
+  glue("{workdir}/plots/Seurat_Marques_UMAPs.pdf"),
   plot = umaps,
   width = 12,
   height = 12,
