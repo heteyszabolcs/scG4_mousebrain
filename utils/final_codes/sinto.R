@@ -64,37 +64,7 @@ for(barcodes in barcode_folder) {
 system(paste0("mkdir -p ", workdir, "/cluster_spec_bams"))
 system(paste0("mv ", workdir, "/cluster_spec_barcodes/", "*.bam ", workdir, "/cluster_spec_bams"))
 
-# # peak calling
-# system(paste0("mkdir -p ", workdir, "/cluster_spec_peaks"))
-# 
-# peaks = CallPeaks(
-#   object = seurat,
-#   group.by = "seurat_clusters",
-#   cleanup = FALSE,
-#   outdir = paste0(workdir, "/cluster_spec_peaks"),
-#   effective.genome.size = mm10
-# )
-# 
-# write.table(
-#   as.data.frame(peaks),
-#   file = glue("{workdir}/cluster_spec_peaks/peaks_per_clusters.bed"),
-#   quote = F,
-#   sep = "\t",
-#   row.names = F,
-#   col.names = F
-# )
-# 
-# 
-# # convert cluster specific bams to bigwigs
-# setwd(dir = paste0(workdir, "/cluster_spec_bams"))
-# 
-# print("Convert bam files to RPGC bigwigs")
-# system(paste0("for i in *.bam; do samtools index ${i}; done"))
-# system(paste0("for i in *.bam; do bamCoverage --bam ${i} -o ${i}_RPGC.bigwig --binSize 10 --normalizeUsing RPGC ",
-#        "--effectiveGenomeSize ", mm10, "; done"))
-# 
-# system(paste0("mkdir -p ", workdir, "/cluster_spec_bigwigs"))
-# system(paste0("mv *.bigwig ", workdir, "/cluster_spec_bigwigs"))
+
 
 
 
