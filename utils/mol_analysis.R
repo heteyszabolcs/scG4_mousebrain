@@ -21,7 +21,7 @@ source("C:/Szabolcs/Karolinska/Data/scripts/get_unique_peaks_ws.R")
 source("C:/Szabolcs/Karolinska/Data/scripts/annotation.R")
 
 # MOL markers
-markers = read_tsv("../results/Seurat/scRNA-Seq_Marques_et_al-FindAllMarkers_output.tsv")
+markers = read_tsv("../results/Seurat/final/sorted_brain/res0.1/integration/outputs/scRNA-Seq_Marques_et_al-FindAllMarkers_output.tsv")
 markers = markers[markers$p_val < 0.05 &
                         markers$avg_log2FC > 0.5, ]
 
@@ -32,7 +32,15 @@ marques_markers = marques_markers %>% dplyr::filter(X2 == "MOL")
 literature_markers = unique(c(marques_markers$X1, zeisel_markers$X1))
 
 # anchor matrix of GFP+ - scRNA integration
-anchors = read_tsv("../results/Seurat/callpeaks_GFPsorted/sorted_anchor_matrix.tsv")
+anchors = read_tsv("../results/Seurat/final/sorted_brain/res0.1/integration/outputs/anchor_matrix.tsv")
+
+# prediction scores
+pred_score = readRDS("../results/Seurat/final/sorted_brain/res0.1/integration/outputs/g4_cell_label_preds.Rds")
+pred_score = t(pred_score@data)
+ids = rownames(pred_score)
+pred_score = as_tibble(pred_score)
+pred_score = pred_score %>% dplyr::select(-max) %>% mutate(cell_id = ids) %>% dplyr::filter(MOL > 0.75)
+mol_ids = pred_score %>% pull(cell_id)
 
 mol_markers = markers %>% 
   mutate(cluster = ifelse(str_detect(markers$cluster, "MOL"), "MOL", cluster)) %>% 
@@ -41,21 +49,19 @@ mol_markers = markers %>%
   arrange(desc(avg_log2FC)) %>% 
   top_n(100, wt = avg_log2FC)
 all_mol_markers = mol_markers$gene
-mol_markers = unique(mol_markers$gene)[1:10]
+mol_markers = unique(mol_markers$gene)[1:20]
+
+opc_markers = markers %>% 
+  mutate(cluster = ifelse(str_detect(markers$cluster, "OPC"), "OPC", cluster)) %>% 
+  mutate(cluster = ifelse(str_detect(markers$cluster, "NFOL"), "NFOL", cluster)) %>% 
+  dplyr::filter(str_detect(cluster, "OPC")) %>% 
+  arrange(desc(avg_log2FC)) %>% 
+  top_n(100, wt = avg_log2FC)
+opc_markers = unique(opc_markers$gene)[1:20]
 
 # Seurat objects
-sorted = readRDS(file = "../results/Seurat/callpeaks_GFPsorted/GFPsorted.Rds")
+sorted = readRDS(file = "../results/Seurat/final/sorted_brain/res0.1/outputs/Seurat_object.Rds")
 g4_counts = as.matrix(sorted@assays$GA@data)
-
-# highly predicted MOL cells
-peaks = fread("../results/Seurat/callpeaks_GFPsorted/high_pred_MOL_peaks.bed")
-peaks = GRanges(
-  seqnames = peaks$V1,
-  ranges = IRanges(
-    start = peaks$V2,
-    end = peaks$V3
-  )
-)
 
 barcodes = fread("../results/Seurat/callpeaks_GFPsorted/high_pred_MOL_barcodes.tsv", header = FALSE)
 barcodes = barcodes$V1
@@ -64,7 +70,7 @@ barcodes = barcodes$V1
 # condition: predicted MOL cells
 # background: non-oligodendrocyte cells (cluster 1, unsorted)
 mol = get_unique_ws(bw = "../results/Seurat/callpeaks_GFPsorted/high_pred_MOL.bw", 
-                    bw_backgr = "../results/Seurat/callpeaks_unsorted/cluster_bigwigs/1_res0.1_brain.bw",
+                    bw_backgr = "../results/Seurat/final/unsorted_brain/res0.1/cluster_spec_bigwigs/1.bam_RPGC.bigwig",
                     subset = peaks)
 
 mol_filt = mol %>% dplyr::filter(gene_symbol %in% all_mol_markers)
@@ -314,7 +320,7 @@ prediction_hm = ggplot(g4_counts_MOL_markers, aes(x = x_order2, y = y_order2, fi
     mid = "#FFFFCC",
     high = "#fc9272",
     midpoint = max(g4_counts_MOL_markers$G4_count) / 2,
-    limits = c(0, 0.045)
+    limits = c(0, 0.09)
   ) +
   xlab(label = "prediction") +
   ylab(label = "top MOL expression markers") +
@@ -361,7 +367,7 @@ g4_counts_MOL_markers = bind_rows(list(g4_nonhigh_pred_counts, g4_high_pred_coun
 
 prediction_boxplot = ggplot(g4_counts_MOL_markers, aes(x = predictions, y = G4_count)) +
 geom_boxplot(color = "black", fill = "#4682b4") +
-  ylim(0, 0.05) +
+  ylim(0, 0.1) +
   labs(
     title = "",
     x = "prediction",
@@ -386,7 +392,7 @@ ggsave(
 )
 
 # anchor score (coming from scRNA-Seq integration) distribution of highly predicted MOL cells 
-anchors = anchors %>% mutate(predictions = ifelse(anchor1_barcode %in% barcodes, "MOL", "non-MOL"))
+anchors = anchors %>% mutate(predictions = ifelse(anchor2_barcode %in% barcodes, "MOL", "non-MOL"))
 anchor_score_boxplot = ggplot(anchors, aes(x = predictions, y = score)) +
   geom_boxplot(color = "black", fill = "#4682b4") +
   ylim(0, 1) +
@@ -665,14 +671,25 @@ hm_top_G4_count_of_MOLs = ggplot(expr, aes(x = x_order, y = y_order, fill = mean
   coord_fixed()
 print(hm_top_G4_count_of_MOLs)
 
+ggsave(
+  glue("{result_folder}highest_G4_in_MOLs_hm.pdf"),
+  plot = hm_top_G4_count_of_MOLs,
+  width = 12,
+  height = 10,
+  device = "pdf"
+)
+
 # genome browser examples
+# Seurat objects
+sorted = readRDS(file = "../results/Seurat/callpeaks_GFPsorted/GFPsorted.Rds")
+
 meta = sorted@meta.data
 meta = meta %>% mutate(MOL_status = ifelse(rownames(meta) %in% barcodes, "predicted MOL", "predicted non-MOL"))
 sorted@meta.data = meta
 
-anxa5 = CoveragePlot(
+oxr1 = CoveragePlot(
   object = sorted,
-  region = "Anxa5",
+  region = "Oxr1",
   annotation = TRUE,
   show.bulk = TRUE,
   group.by = "MOL_status",

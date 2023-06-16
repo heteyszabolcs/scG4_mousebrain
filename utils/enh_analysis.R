@@ -17,7 +17,7 @@ suppressPackageStartupMessages({
 # export folder
 result_folder = "../results/GenomicRanges/unsorted_outputs/"
 # cluster-spec bigwigs
-bigwigs = "../results/Seurat/callpeaks_unsorted/cluster_bigwigs/"
+bigwigs = "../results/Seurat/final/unsorted_brain/res0.8/cluster_spec_bigwigs/"
 
 # Marek K27ac
 k27ac = "../data/Marek_data/histone_scCnT/k27ac/possorted_RPGC.bigwig"
@@ -26,7 +26,7 @@ mesc_k27ac = "../data/bw/Martire2019_ESC_H33WT_H3K27ac.bw"
 mesc_k27ac2 = "../data/bw/Creyghton_et_al_mESC_H3K27ac.bw"
 
 # data
-g4_peaks = "../results/Seurat/callpeaks_unsorted/peak_sets/peaks_per_clusters.bed"
+g4_peaks = "../results/Seurat/final/unsorted_brain/res0.8/cluster_spec_peaks/peaks_per_clusters.bed"
 cm_enh = "../data/bed/ESC_Enhancer_CruzMolina.active_mm10.bed"
 gl_enh = "../data/bed/GSE171771_FAIRE_STARR_enh_mESC.bed"
 ltrs = "../data/bed/RepMasker_lt200bp.LTRIS2.bed"
@@ -149,30 +149,30 @@ bigwig_samples = list.files(bigwigs, full.names = TRUE)
 plot_input = bw_loci(bigwig_samples, loci = k27ac_enh)
 plot_input = as_tibble(plot_input)
 plot_input_res0.8 = plot_input %>% 
-  dplyr::select(seqnames, start, end, "0" = X0, "1" = X1, "2" = X2, "3" = X3, "4" = X4, "0 - oligodendr" = X0_res0.1_oligo, "1 - misc. brain" = X1_res0.1_brain) %>% 
-  pivot_longer("0":"1 - misc. brain", names_to = "cluster", values_to = "G4") %>% 
-  dplyr::filter(cluster != "0 - oligodendr") %>% 
-  dplyr::filter(cluster != "1 - misc. brain") 
+  dplyr::select(seqnames, start, end, "0" = X0.bam_RPGC, "1" = X1.bam_RPGC, "2" = X2.bam_RPGC, "3" = X3.bam_RPGC, "4" = X4.bam_RPGC) %>% 
+  pivot_longer("0":"4", names_to = "cluster", values_to = "G4") 
+  # dplyr::filter(cluster != "0 - oligodendr") %>% 
+  # dplyr::filter(cluster != "1 - misc. brain") 
 
 plot_input_res0.8 = plot_input_res0.8 %>% mutate(k27ac_source = "Bartosovic et al.")
 
 mesc_plot_input = bw_loci(bigwig_samples, loci = mesc_k27ac_enh)
 mesc_plot_input = as_tibble(mesc_plot_input)
 mesc_plot_input_res0.8 = mesc_plot_input %>% 
-  dplyr::select(seqnames, start, end, "0" = X0, "1" = X1, "2" = X2, "3" = X3, "4" = X4, "0 - oligodendr" = X0_res0.1_oligo, "1 - misc. brain" = X1_res0.1_brain) %>% 
-  pivot_longer("0":"1 - misc. brain", names_to = "cluster", values_to = "G4") %>% 
-  dplyr::filter(cluster != "0 - oligodendr") %>% 
-  dplyr::filter(cluster != "1 - misc. brain") 
+  dplyr::select(seqnames, start, end, "0" = X0.bam_RPGC, "1" = X1.bam_RPGC, "2" = X2.bam_RPGC, "3" = X3.bam_RPGC, "4" = X4.bam_RPGC) %>%  
+  pivot_longer("0":"4", names_to = "cluster", values_to = "G4")  
+  # dplyr::filter(cluster != "0 - oligodendr") %>% 
+  # dplyr::filter(cluster != "1 - misc. brain") 
 
 mesc_plot_input_res0.8 = mesc_plot_input_res0.8 %>% mutate(k27ac_source = "Martier et al.")
 
 mesc_plot_input2 = bw_loci(bigwig_samples, loci = mesc_k27ac_enh2)
 mesc_plot_input2 = as_tibble(mesc_plot_input)
 mesc_plot_input_res0.8_2 = mesc_plot_input2 %>% 
-  dplyr::select(seqnames, start, end, "0" = X0, "1" = X1, "2" = X2, "3" = X3, "4" = X4, "0 - oligodendr" = X0_res0.1_oligo, "1 - misc. brain" = X1_res0.1_brain) %>% 
-  pivot_longer("0":"1 - misc. brain", names_to = "cluster", values_to = "G4") %>% 
-  dplyr::filter(cluster != "0 - oligodendr") %>% 
-  dplyr::filter(cluster != "1 - misc. brain") 
+  dplyr::select(seqnames, start, end, "0" = X0.bam_RPGC, "1" = X1.bam_RPGC, "2" = X2.bam_RPGC, "3" = X3.bam_RPGC, "4" = X4.bam_RPGC) %>%  
+  pivot_longer("0":"4", names_to = "cluster", values_to = "G4")
+  # dplyr::filter(cluster != "0 - oligodendr") %>% 
+  # dplyr::filter(cluster != "1 - misc. brain") 
 
 mesc_plot_input_res0.8_2 = mesc_plot_input_res0.8_2 %>% mutate(k27ac_source = "Creyghton et al.")
 
@@ -261,7 +261,7 @@ ggsave(
 )
 
 
-bigwig_samples = c("0.bw", "1.bw", "2.bw", "3.bw", "4.bw")
+bigwig_samples = c("0.bam_RPGC.bigwig", "1.bam_RPGC.bigwig", "2.bam_RPGC.bigwig", "3.bam_RPGC.bigwig", "4.bam_RPGC.bigwig")
 scatters = lapply(bigwig_samples, scatter_function)
 scatters = ggarrange(plotlist = scatters)
 scatters
@@ -341,7 +341,7 @@ for (cluster in names(g4s_no_ol)) {
   g4_k27ac_cm_enh_quant = c(g4_k27ac_cm_enh_quant, length(ol))
 }
 
-get_signals = function(selected_cluster = "0") {
+get_signals = function(selected_cluster = "4") {
   require("wigglescout")
   cl_cm_ol = suppressWarnings(subsetByOverlaps(g4_peaks[[selected_cluster]], k27ac_enh, type = "any", minoverlap = 1))
   cl_cm_ol = as.tibble(cl_cm_ol)
@@ -349,11 +349,11 @@ get_signals = function(selected_cluster = "0") {
   cl_cm_ol = as.tibble(cl_cm_ol)
   
   bigwigs = c(
-    "../results/Seurat/callpeaks_unsorted/cluster_bigwigs/0.bw",
-    "../results/Seurat/callpeaks_unsorted/cluster_bigwigs/1.bw",
-    "../results/Seurat/callpeaks_unsorted/cluster_bigwigs/2.bw",
-    "../results/Seurat/callpeaks_unsorted/cluster_bigwigs/3.bw",
-    "../results/Seurat/callpeaks_unsorted/cluster_bigwigs/4.bw",
+    "../results/Seurat/final/unsorted_brain/res0.8/cluster_spec_bigwigs/0.bam_RPGC.bigwig",
+    "../results/Seurat/final/unsorted_brain/res0.8/cluster_spec_bigwigs/1.bam_RPGC.bigwig",
+    "../results/Seurat/final/unsorted_brain/res0.8/cluster_spec_bigwigs/2.bam_RPGC.bigwig",
+    "../results/Seurat/final/unsorted_brain/res0.8/cluster_spec_bigwigs/3.bam_RPGC.bigwig",
+    "../results/Seurat/final/unsorted_brain/res0.8/cluster_spec_bigwigs/4.bam_RPGC.bigwig",
     k27ac
   )
   
@@ -366,16 +366,16 @@ get_signals = function(selected_cluster = "0") {
     col_names = FALSE
   )
   bed = glue("../data/bed/Cruz_Molina_enh-unsorted_cluster{selected_cluster}.bed")
-  selected_bw = glue("../results/Seurat/callpeaks_unsorted/cluster_bigwigs/{selected_cluster}.bw")
+  selected_bw = glue("../results/Seurat/final/unsorted_brain/res0.8/cluster_spec_bigwigs/{selected_cluster}.bam_RPGC.bigwig")
   bigwigs = c(bigwigs[which(bigwigs != selected_bw)], selected_bw)
   
   read_cov = bw_loci(bigwigs, loci = bed)
   read_cov = as.data.frame(read_cov)
   
-  columns = colnames(read_cov)[grepl("X", colnames(read_cov)[which(colnames(read_cov) != glue("X{selected_cluster}"))])]
+  columns = colnames(read_cov)[grepl("X", colnames(read_cov)[which(colnames(read_cov) != glue("X{selected_cluster}.bam_RPGC"))])]
   read_cov_filt = read_cov %>% 
     mutate(average = rowMeans(dplyr::select(., columns))) %>% 
-    mutate(enrichment = get(glue("X{selected_cluster}")) / average) %>% 
+    mutate(enrichment = get(glue("X{selected_cluster}.bam_RPGC")) / average) %>% 
     dplyr::filter(enrichment >= 10)
   
   return(read_cov_filt)
@@ -383,7 +383,7 @@ get_signals = function(selected_cluster = "0") {
 }
 
 # get signals test
-cl_0_spec = get_signals()
+cl_4_spec = get_signals()
 
 g4_gl_enh_quant = numeric()
 for (cluster in names(g4s_no_ol)) {
