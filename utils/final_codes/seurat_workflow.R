@@ -177,8 +177,11 @@ ggsave(
 )
 
 # exclude outlier cells
+clusters = levels(seurat@meta.data$seurat_clusters)
 if(res == 0.1) {
-  seurat = subset(x = seurat, idents = 2, invert = TRUE)
+  if(2 %in% clusters) {
+    seurat = subset(x = seurat, idents = 2, invert = TRUE)
+  }
 }
 
 # marker analysis by logistic regression with total number of fragments as a latent variable
@@ -204,8 +207,8 @@ for(i in clusters) {
 
 # plot UMAPs
 if(res == 0.1) {
-  cols = c("0" = "#addd8e",
-           "1" = "#bdbdbd")
+  cols = c("0" = "#8dd3c7",
+           "1" = "#ffffb3")
 
   dim_res0.1 = DimPlot(
     object = seurat,
@@ -220,7 +223,7 @@ if(res == 0.1) {
     scale_colour_manual(
       values = cols,
       breaks = c("0", "1"),
-      labels = c("oligodendrocytes (GFP+)", "unsorted brain")
+      #labels = c("MEF", "mESC")
     ) +
     ggtitle("") +
     theme(
@@ -231,7 +234,7 @@ if(res == 0.1) {
     )
 
   ggsave(
-    glue("{workdir}/plots/Seurat_unsorted_UMAP_res0.1.png"),
+    glue("{workdir}/plots/Seurat_UMAP_res0.1.png"),
     plot = dim_res0.1,
     width = 10,
     height = 10,
@@ -239,7 +242,7 @@ if(res == 0.1) {
   )
 
   ggsave(
-    glue("{workdir}/plots/Seurat_unsorted_UMAP_res0.1.pdf"),
+    glue("{workdir}/plots/Seurat_UMAP_res0.1.pdf"),
     plot = dim_res0.1,
     width = 10,
     height = 10,

@@ -28,12 +28,12 @@ marques_scrna = "../results/Seurat/scRNASeq_GSE75330.rds"
 
 # G4 scCut&Tag marker regions
 # Wilcoxon rank sum based differential analysis
-markers = fread("../results/Seurat/callpeaks_unsorted/FindAllMarkers_output.tsv")
+markers = fread("../results/Seurat/final/unsorted_brain/res0.8/outputs/FindAllMarkers_logreg_output.tsv")
 markers = markers %>% rownames_to_column() %>% mutate(rowname = as.character(rowname))
 markers_annot = mm10_annotation(markers, seqname_col = "chr", start_col = "start", end_col = "end", feature_1 = "rowname", feature_2 = "rowname")
 markers = markers %>% inner_join(., markers_annot, by = c("rowname" = "feature_1")) %>% 
   dplyr::select(chr, start = start.x, end = end.x, p_val, p_val_adj, avg_log2FC, cluster, distanceToTSS, gene = SYMBOL)
-write_tsv(markers, "../results/Seurat/callpeaks_unsorted/FindAllMarkers_output_annot.tsv")
+write_tsv(markers, "../results/Seurat/callpeaks_unsorted/FindAllMarkers_logreg_output_annot.tsv")
 markers = markers %>% na.omit()
 
 # logistic regression based differential analysis
@@ -233,12 +233,16 @@ ggsave(
 order = marques_means %>% arrange(desc(pseudobulked_mean_expr)) %>% pull(gene)
 order = factor(bp_input$gene, levels = order)
 
-ggplot(bp_input, aes(x = order, y = log2_norm_expr)) +
-  #geom_boxplot(color = "black", outlier.shape = NA, outlier.stroke = NA, outlier.fill = NA) 
+jitter = ggplot(bp_input, aes(x = order, y = log2_norm_expr)) +
+  #geom_boxplot(color = "black", outlier.shape = NA, outlier.stroke = NA, outlier.fill = NA)
   geom_jitter(aes(color = source), size = 1, alpha = 0.5) +
   scale_color_manual(values = c("#bdbdbd", "#fec44f")) +
-  guides(alpha = FALSE, size = FALSE, color = guide_legend(override.aes = list(size = 5))) +
-  ylim(0, 3) +
+  guides(
+    alpha = FALSE,
+    size = FALSE,
+    color = guide_legend(override.aes = list(size = 5))
+  ) +
+  ylim(0, 5) +
   labs(
     title = "",
     x = "",
@@ -250,9 +254,16 @@ ggplot(bp_input, aes(x = order, y = log2_norm_expr)) +
     text = element_text(size = 9),
     plot.title = element_text(size = 10),
     axis.title.y = element_text(size = 12),
-    axis.text.x = element_text(size = 12, color = "black", angle = 45, vjust = 1, hjust = 1),
+    axis.text.x = element_text(
+      size = 12,
+      color = "black",
+      angle = 45,
+      vjust = 1,
+      hjust = 1
+    ),
     axis.text.y = element_text(size = 12, color = "black")
-  ) 
+  ) + stat_compare_means(label = "p.signif")
+jitter = rasterize(jitter, layers='Point', dpi=300)
 
 ggsave(
   glue("{result_folder}FindAllMarkers_jitter_posmarkers.png"),

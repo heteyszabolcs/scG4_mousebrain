@@ -113,12 +113,12 @@ p2 = DimPlot(
   )
 
 # find all markers in scRNA-Seq data
-rna@active.ident = rna$cell_class
+rna@active.ident = factor(rna$merged_cell_class, levels = unique(rna$merged_cell_class))
 
 # export scRNA Seurat object
 saveRDS(rna, glue("../results/Seurat/scRNASeq_GSE75330.rds"))
 
-#markers = FindAllMarkers(rna)
+markers = FindAllMarkers(rna)
 markers = read_tsv("../results/Seurat/scRNA-Seq_Marques_et_al-FindAllMarkers_output.tsv")
 markers.pos = markers[markers$p_val < 0.05 &
                         markers$avg_log2FC > 0.5,]

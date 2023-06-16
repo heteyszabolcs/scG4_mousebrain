@@ -134,7 +134,14 @@ p2 = DimPlot(
   )
 
 # find all markers in scRNA-Seq data
-rna@active.ident = rna$cell_class
+rna@active.ident = factor(rna$merged_cell_class, levels = unique(rna$merged_cell_class))
+
+markers = FindAllMarkers(rna)
+markers = write_tsv(markers, glue("{workdir}/outputs/scRNA-Seq_Marques_et_al-FindAllMarkers_output.tsv"))
+markers.pos = markers[markers$p_val < 0.05 &
+                        markers$avg_log2FC > 0.5,]                   
+
+#rna@active.ident = rna$cell_class
 
 # export scRNA Seurat object
 saveRDS(rna, glue("{workdir}/outputs/scRNA_Seq_Marques_et_el.Rds"))
@@ -346,6 +353,7 @@ create_expr_feature_plot = function(marker_gene) {
     features = marker_gene,
     min.cutoff = min(coembed.scrna@assays$RNA@data[marker_gene,]),
     max.cutoff = max(coembed.scrna@assays$RNA@data[marker_gene,]),
+    pt.size = 2,
     raster = TRUE
   ) +
     xlim(-15, 15) +
@@ -374,6 +382,7 @@ create_g4_feature_plot = function(marker_gene) {
     features = marker_gene,
     min.cutoff = min(coembed.g4@assays$GA@data[marker_gene,]),
     max.cutoff = max(coembed.g4@assays$GA@data[marker_gene,]),
+    pt.size = 2,
     raster = TRUE
   ) +
     xlim(-15, 15) +
@@ -502,7 +511,7 @@ g4_violins = lapply(best_marques_markers, function(x)
     split.by = "seurat_clusters",
     group.by = "seurat_clusters"
   ) +
-    scale_fill_manual(values = c("#addd8e", "#bdbdbd")) +
+    scale_fill_brewer(palette = "Set3") +
     xlab(" ") +
     ylim(0, 0.00005) +
     guides(legend = "none", fill = "none") +
@@ -553,7 +562,7 @@ ggsave(
 DimPlot(rna)
 coembed_cells = DimPlot(
   coembed,
-  pt.size = 1,
+  pt.size = 2,
   label.size = 7,
   group.by = 'cell_class',
   repel = TRUE,
@@ -573,7 +582,7 @@ coembed_cells = DimPlot(
 
 coembed_cells2 = DimPlot(
   coembed,
-  pt.size = 1,
+  pt.size = 2,
   label.size = 7,
   group.by = 'cell_class',
   repel = TRUE,
@@ -603,7 +612,7 @@ ggsave(
 
 coembed_gfp = DimPlot(
   coembed,
-  pt.size = 1,
+  pt.size = 2,
   label.size = 7,
   group.by = 'GFP',
   repel = TRUE,
@@ -623,7 +632,7 @@ coembed_gfp = DimPlot(
 
 coembed_clusters = DimPlot(
   coembed,
-  pt.size = 1,
+  pt.size = 2,
   label.size = 7,
   group.by = 'seurat_clusters',
   repel = TRUE,
@@ -642,7 +651,7 @@ coembed_clusters = DimPlot(
 
 coembed_experiments = DimPlot(
   coembed,
-  pt.size = 1,
+  pt.size = 2,
   label.size = 7,
   group.by = 'data_type',
   repel = TRUE,
@@ -681,7 +690,7 @@ cols = c(
 
 coembed_cluster0 = DimPlot(
   coembed,
-  pt.size = 1,
+  pt.size = 2,
   label.size = 7,
   group.by = 'seurat_clusters',
   repel = TRUE,
@@ -721,7 +730,7 @@ cols = c(
 
 coembed_cluster1 = DimPlot(
   coembed,
-  pt.size = 1,
+  pt.size = 2,
   label.size = 7,
   group.by = 'seurat_clusters',
   repel = TRUE,
@@ -761,7 +770,7 @@ cols = c(
 
 coembed_cluster2 = DimPlot(
   coembed,
-  pt.size = 1,
+  pt.size = 2,
   label.size = 7,
   group.by = 'seurat_clusters',
   repel = TRUE,
@@ -801,7 +810,7 @@ cols = c(
 
 coembed_cluster3 = DimPlot(
   coembed,
-  pt.size = 1,
+  pt.size = 2,
   label.size = 7,
   group.by = 'seurat_clusters',
   repel = TRUE,
@@ -938,3 +947,121 @@ ggsave(
   height = 12,
   device = "pdf"
 )
+
+# coenrichment analysis of G4 and scRNA-Seq signals
+# marker gene statistics
+print("Coenrichment analysis on positive Marques et al. markers")
+
+types = rownames(cell_class_pred@data)
+cell_class_pred = as_tibble(cell_class_pred@data)
+cell_class_pred = cell_class_pred %>% mutate(type = types) %>% dplyr::select(type, everything())
+
+coembed.g4 = coembed[,coembed$data_type == "G4 scCut&Tag"]
+coembed.scrna = coembed[,coembed$data_type == "scRNA-Seq (Marques et al.)"]
+
+max_ga = sapply(best_marques_markers, function(x) max(coembed.g4@assays$GA[x,]))
+max_expr = sapply(best_marques_markers, function(x) max(coembed.scrna@assays$RNA[x,]))
+
+# set minimum GA threshold above that the cells will be labeled
+ga_thr = c(0.5, 0.5, 0.5, 0.0, 0.0, 0.0)
+marker_stat = tibble(marker = best_marques_markers, max_GA = max_ga, max_expression = max_expr, GA_thr = ga_thr)
+
+# visualizations
+vis_dim_plot = function(gene) {
+  print(gene)
+  ga_thr = unname(marker_stat[which(marker_stat$marker == gene),]$GA_thr)
+  
+  get_cell_ids = coembed.g4@assays$GA@data[gene,]
+  get_cell_ids = names(get_cell_ids[get_cell_ids > ga_thr])
+  
+  predictions = cell_class_pred %>%
+    pivot_longer(
+      .,
+      cols = c(colnames(cell_class_pred)[2]:colnames(cell_class_pred)[dim(cell_class_pred)[2]]),
+      names_to = "cell_id",
+      values_to = "pred_score"
+    ) %>%
+    dplyr::filter(!type == "max")
+  
+  plot = DimPlot(
+    object = coembed.g4,
+    pt.size = 2,
+    cells.highlight = get_cell_ids,
+    cols.highlight = "red",
+    cols = "gray",
+    #rder = TRUE,
+    #raster = TRUE
+  ) + NoAxes() + ggtitle(gene) + NoLegend()
+  return(print(plot))
+}
+
+dims = lapply(best_marques_markers, vis_dim_plot)
+
+for(i in seq(length(marker_stat$marker))) {
+  ggsave(
+    glue(
+      "{workdir}/plots/coenrich_cluster_anal_dimplot_{marker_stat$marker[i]}.pdf"
+    ),
+    plot = dims[i][[1]],
+    width = 4,
+    height = 3,
+    device = "pdf"
+  )
+}
+
+vis_pred_boxplot = function(gene) {
+  print(gene)
+  
+  get_cell_ids = coembed.g4@assays$GA@data[gene,]
+  get_cell_ids = names(get_cell_ids[get_cell_ids > ga_thr])
+  
+  predictions = cell_class_pred %>%
+    pivot_longer(
+      .,
+      cols = c(colnames(cell_class_pred)[2]:colnames(cell_class_pred)[dim(cell_class_pred)[2]]),
+      names_to = "cell_id",
+      values_to = "pred_score"
+    ) %>%
+    dplyr::filter(!type == "max")
+  
+  predictions = predictions %>% dplyr::filter(cell_id %in% get_cell_ids)
+  
+  plot = ggplot(predictions,
+                aes(x = type, y = pred_score, fill = type)) +
+    geom_boxplot(color = "black") +
+    scale_fill_brewer(palette = "Set3") +
+    ylim(0, 1) +
+    labs(
+      title = "",
+      x = "",
+      y = "prediction score",
+      fill = ""
+    ) +
+    theme_classic() +
+    ggtitle(gene) +
+    guides(fill = "none") +
+    theme(
+      text = element_text(size = 9),
+      plot.title = element_text(size = 15, face = "bold"),
+      axis.text.x = element_text(size = 12, color = "black"),
+      axis.text.y = element_text(size = 12, color = "black"),
+      axis.title = element_text(size = 20, color = "black")
+    )
+  
+  return(print(plot))
+}
+
+boxplots = lapply(best_marques_markers, vis_pred_boxplot)
+boxplots[1]
+
+for(i in seq(length(marker_stat$marker))) {
+  ggsave(
+    glue(
+      "{workdir}/plots/coenrich_cluster_anal_pred_box_{marker_stat$marker[i]}.pdf"
+    ),
+    plot = boxplots[i][[1]],
+    width = 6,
+    height = 4,
+    device = "pdf"
+  )
+}

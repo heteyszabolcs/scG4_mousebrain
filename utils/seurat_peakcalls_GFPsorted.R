@@ -158,6 +158,31 @@ ggsave(
   dpi = 300,
 )
 
+resolutions = seq(0.1, 1.7, by = 0.2)
+dims = list()
+for(res in resolutions) {
+  clustering = FindClusters(object = g4,
+                    verbose = FALSE,
+                    resolution = res,
+                    algorithm = 3)
+  dim = DimPlot(object = clustering, label = TRUE, pt.size = 6) + 
+    NoLegend() +
+    scale_color_brewer(palette = "Set3") +
+    xlim(-10, 10) + 
+    ylim(-10, 10) + 
+    ggtitle(glue("GFP-sorted scCutnTag", " - ", as.character(res))) +
+    theme(
+      text = element_text(size = 5),
+      plot.title = element_text(size = 5),
+      axis.text.x = element_text(size = 5, color = "black", angle = 0),
+      axis.text.y = element_text(size = 5, color = "black")
+    )
+  print(dim)
+  dims[[as.character(res)]] = dim
+}
+
+ggarrange(plotlist = dims)
+
 # QC violin plots
 nF_violin = VlnPlot(g4, group.by = "seurat_clusters", features = "nFeature_peaks", pt.size = 0.1) +
   scale_fill_brewer(palette = "Set3") +

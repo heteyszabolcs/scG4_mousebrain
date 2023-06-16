@@ -13,7 +13,7 @@ suppressPackageStartupMessages({
 result_folder = "../results/Seurat/callpeaks_GFPsorted/"
 
 # cell type predictions coming from Seurat's label transferring (seurat_int_umap.R)
-cell_class_pred = readRDS(glue("{result_folder}sorted_cell_label_preds.Rds"))
+cell_class_pred = readRDS("../results/Seurat/final/sorted_brain/integration/outputs/g4_cell_label_preds.Rds")
 types = rownames(cell_class_pred@data)
 cell_class_pred = as_tibble(cell_class_pred@data)
 cell_class_pred = cell_class_pred %>% mutate(type = types) %>% dplyr::select(type, everything())
@@ -22,12 +22,12 @@ cell_class_pred = cell_class_pred %>% mutate(type = types) %>% dplyr::select(typ
 # main source: 
 # https://github.com/Castelo-Branco-lab/scCut-Tag_2020/blob/master/notebooks/integration/integration_H3K4me3_marques.Rmd
 # Seurat objects
-sorted = readRDS(glue("{result_folder}sorted_int_Marques.Rds"))
-rna = readRDS("../results/Seurat/scRNASeq_GSE75330.rds")
+sorted = readRDS("../results/Seurat/final/sorted_brain/integration/outputs/G4_Marques_scRNA_integration.Rds")
+rna = readRDS("../results/Seurat/final/sorted_brain/integration/outputs/scRNA_Seq_Marques_et_el.Rds")
 genes.use = VariableFeatures(rna)
 
 rna@meta.data$data_type = "scRNA-Seq (Marques et al.)"
-sorted@meta.data$data_type = "sorted G4 scCut&Tag"
+sorted@meta.data$data_type = "G4 scCut&Tag"
 
 coembed = merge(x = rna, y = sorted)
 
@@ -50,14 +50,14 @@ new_ids[new_ids == 'MOL5'] = 'MOL'
 new_ids[new_ids == 'MOL6'] = 'MOL'
 coembed@meta.data$cell_class = new_ids
 
-coembed.g4 = coembed[,coembed$data_type == "sorted G4 scCut&Tag"]
+coembed.g4 = coembed[,coembed$data_type == "G4 scCut&Tag"]
 coembed.scrna = coembed[,coembed$data_type == "scRNA-Seq (Marques et al.)"]
 
 # marker gene statistics
-markers = c("Ptprz1", "Gpr17", "Marcks", "Ctps", "Il33", "Igf2")
+markers = c("Ptprz1", "Gpr17", "Slc1a1", "Ctps", "Sepp1", "Igf2")
 max_ga = sapply(markers, function(x) max(coembed.g4@assays$GA[x,]))
 max_expr = sapply(markers, function(x) max(coembed.scrna@assays$RNA[x,]))
-ga_thr = c(1.20, 1.10, 1.10, 1.15, 1.0, 0.67)
+ga_thr = c(0.5, 0.5, 0.5, 0.0, 0.0, 0.0)
 #quant_99 = sapply(markers, function(x) quantile(as.vector(coembed.g4@assays$GA[x, ]), 0.9999))
 
 marker_stat = tibble(marker = markers, max_GA = max_ga, max_expression = max_expr, GA_thr = ga_thr)
@@ -67,8 +67,8 @@ vis_dim_plot = function(gene) {
   print(gene)
   ga_thr = unname(marker_stat[which(marker_stat$marker == gene),]$GA_thr)
   
-  get_cell_ids = FetchData(object = coembed.g4, vars = gene)
-  get_cell_ids = rownames(get_cell_ids)[get_cell_ids > ga_thr]
+  get_cell_ids = coembed.g4@assays$GA@data[gene,]
+  get_cell_ids = names(get_cell_ids[get_cell_ids > ga_thr])
   
   predictions = cell_class_pred %>%
     pivot_longer(
@@ -84,13 +84,34 @@ vis_dim_plot = function(gene) {
     cells.highlight = get_cell_ids,
     cols.highlight = "red",
     cols = "gray",
-    order = TRUE,
-    raster = TRUE
+    #order = TRUE,
+    #raster = TRUE
   ) + NoAxes() + ggtitle(gene) + NoLegend()
   return(print(plot))
 }
 
 dims = lapply(markers, vis_dim_plot)
+dims[[5]]
+
+FeaturePlot(
+  object = coembed.g4,
+  features = "Sepp1",
+  min.cutoff = min(coembed.g4@assays$GA@data["Sepp1",]),
+  max.cutoff = max(coembed.g4@assays$GA@data["Sepp1",]),
+  pt.size = 2,
+  raster = TRUE
+) +
+  xlim(-15, 15) +
+  ylim(-10, 10) +
+  scale_color_viridis_c() +
+  theme(
+    legend.position = 'bottom',
+    text = element_text(size = 15),
+    plot.title = element_text(size = 20),
+    axis.text.x = element_text(size = 25, color = "black"),
+    axis.text.y = element_text(size = 25, color = "black")
+  ) +
+  NoAxes()
 
 for(i in seq(length(marker_stat$marker))) {
   ggsave(
@@ -107,8 +128,8 @@ for(i in seq(length(marker_stat$marker))) {
 vis_pred_boxplot = function(gene) {
   print(gene)
   
-  get_cell_ids = FetchData(object = coembed.g4, vars = gene)
-  get_cell_ids = rownames(get_cell_ids)[get_cell_ids > ga_thr]
+  get_cell_ids = coembed.g4@assays$GA@data[gene,]
+  get_cell_ids = names(get_cell_ids[get_cell_ids > ga_thr])
   
   predictions = cell_class_pred %>%
     pivot_longer(
@@ -147,6 +168,7 @@ vis_pred_boxplot = function(gene) {
 }
 
 boxplots = lapply(markers, vis_pred_boxplot)
+boxplots[1]
 
 for(i in seq(length(marker_stat$marker))) {
   ggsave(

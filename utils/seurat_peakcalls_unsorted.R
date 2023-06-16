@@ -149,7 +149,11 @@ ggsave(
 )
 
 # removing cluster 2 - cluster 2 can be omitted
-g4_res0.1 = subset(x = g4_res0.1, idents = 2, invert = TRUE)
+clusters = levels(g4_res0.1@meta.data$seurat_clusters)
+if(2 %in% clusters) {
+  g4_res0.1 = subset(x = g4_res0.1, idents = 2, invert = TRUE)
+}
+
 
 # Find all marker regions across clusters
 # logistic regression with total number of fragments as a latent variable
