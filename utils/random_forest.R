@@ -36,6 +36,7 @@ pred_score_mol = pred_score %>%
   dplyr::filter(MOL > 0.75)
 mol_ids = pred_score_mol %>% pull(cell_id)
 
+# highly predicted OPC cells
 pred_score_opc = pred_score %>% 
   dplyr::select(-max) %>% 
   mutate(cell_id = ids) %>% 
@@ -118,7 +119,7 @@ random_forest_mol = function(predictors,
   rf_grid = 
     grid_latin_hypercube(
       min_n(), 
-      mtry(range = c(5, 10)), 
+      mtry(range = c(2, 18)), 
       trees(), 
       size = 80)
   
@@ -139,11 +140,11 @@ random_forest_mol = function(predictors,
     set_engine("randomForest") %>%
     fit(cell_type ~ ., data = training)
   
-  rf_out = rf %>%
-    predict(testing) %>%
-    bind_cols(testing) %>%
-    glimpse()
-  
+  # rf_out = rf %>%
+  #   predict(testing) %>%
+  #   bind_cols(testing) %>%
+  #   glimpse()
+  # 
   # rf %>%
   #   predict(testing) %>%
   #   bind_cols(testing) %>%
@@ -158,9 +159,22 @@ random_forest_mol = function(predictors,
     autoplot + ggtitle("")
   print(roc)
   
+  pr = probs %>%
+    pr_curve(cell_type, ".pred_MOL") %>%
+    autoplot + ggtitle("")
+  print(pr)
+  
   ggsave(
     glue("{result_folder}{curve_filename}-Rf_ROC_curve-MOL.pdf"),
     plot = roc,
+    width = 6,
+    height = 3,
+    device = "pdf"
+  )
+  
+  ggsave(
+    glue("{result_folder}{curve_filename}-Rf_PR_curve-MOL.pdf"),
+    plot = pr,
     width = 6,
     height = 3,
     device = "pdf"
@@ -238,7 +252,7 @@ random_forest_opc = function(predictors,
   rf_grid <- 
     grid_latin_hypercube(
       min_n(), 
-      mtry(range = c(5, 10)), 
+      mtry(range = c(2, 18)), 
       trees(), 
       size = 80)
   
@@ -259,10 +273,10 @@ random_forest_opc = function(predictors,
     set_engine("randomForest") %>%
     fit(cell_type ~ ., data = training)
   
-  rf_out = rf %>%
-    predict(testing) %>%
-    bind_cols(testing) %>%
-    glimpse()
+  # rf_out = rf %>%
+  #   predict(testing) %>%
+  #   bind_cols(testing) %>%
+  #   glimpse()
   
   # rf %>%
   #   predict(testing) %>%

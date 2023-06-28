@@ -69,6 +69,17 @@ barcodes = barcodes$V1
 # compute G4 fold changes
 # condition: predicted MOL cells
 # background: non-oligodendrocyte cells (cluster 1, unsorted)
+peaks = fread("../results/Seurat/callpeaks_GFPsorted/high_pred_MOL_peaks.bed")
+peaks$type = "MOL"
+peaks = GRanges(
+  seqnames = peaks$V1,
+  ranges = IRanges(
+    start = peaks$V2,
+    end = peaks$V3,
+    names = peaks$type,
+  )
+)
+
 mol = get_unique_ws(bw = "../results/Seurat/callpeaks_GFPsorted/high_pred_MOL.bw", 
                     bw_backgr = "../results/Seurat/final/unsorted_brain/res0.1/cluster_spec_bigwigs/1.bam_RPGC.bigwig",
                     subset = peaks)
@@ -200,7 +211,7 @@ hm_expr_G4s = ggplot(expr, aes(x = x_order, y = y_order, fill = means)) +
     mid = "#FFFFCC",
     high = "#fc9272",
     midpoint = max(expr$means) / 2,
-    limits = c(0, 1.3)
+    limits = c(0, 0.75)
   ) +
   xlab(label = "oligodendrocyte subtype") +
   ylab(label = "gene with MOL specific promoter G4") +
@@ -270,7 +281,7 @@ hm_expr_mol_markers = ggplot(expr, aes(x = x_order, y = y_order, fill = means)) 
     mid = "#FFFFCC",
     high = "#fc9272",
     midpoint = max(expr$means) / 2,
-    limits = c(0, 4)
+    limits = c(0, 6)
   ) +
   xlab(label = "oligodendrocyte subtype") +
   ylab(label = "top MOL expression markers") +
@@ -696,29 +707,31 @@ oxr1 = CoveragePlot(
   peaks = TRUE
 ) + scale_fill_brewer(type = "seq", palette = "Set3") 
 
-car2 = CoveragePlot(
+anln = CoveragePlot(
   object = sorted,
-  region = "Car2",
+  region = "Anln",
   annotation = TRUE,
+  show.bulk = TRUE,
   group.by = "MOL_status",
   peaks = TRUE
 ) + scale_fill_brewer(type = "seq", palette = "Set3")
 
-mgst3 = CoveragePlot(
+sepp1 = CoveragePlot(
   object = sorted,
-  region = "Mgst3",
+  region = "Sepp1",
   annotation = TRUE,
+  show.bulk = TRUE,
   group.by = "MOL_status",
   peaks = TRUE
 ) + scale_fill_brewer(type = "seq", palette = "Set3")
 
-examples = ggarrange(mgst3, car2, anxa5, ncol = 1, nrow = 3)
+examples = ggarrange(oxr1, anln, sepp1, ncol = 1, nrow = 3)
 
 ggsave(
   glue("{result_folder}MOL_markers-G4_score_examples.pdf"),
   plot = examples,
   width = 6,
-  height = 6,
+  height = 9,
   device = "pdf"
 )
 
