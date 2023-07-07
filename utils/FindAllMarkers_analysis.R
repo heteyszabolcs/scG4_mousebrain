@@ -10,6 +10,8 @@ suppressPackageStartupMessages({
   library("circlize")
   library("Seurat")
   library("Matrix")
+  library("ggpubr")
+  library("ggrastr")
 })
 
 set.seed(5)
@@ -128,7 +130,7 @@ scrna = readRDS(scrna)
 marques_scrna = readRDS(marques_scrna)
 
 interesting_genes = volc_input %>% arrange(desc(abs(avg_log2FC))) %>% pull(gene_symbol)
-interesting_genes = interesting_genes[1:10]
+interesting_genes = interesting_genes[1:20]
 
 # creating inputs for visualization
 marques_lognorm = as.data.frame(marques_scrna[["RNA"]]@data)
@@ -140,11 +142,11 @@ for(gene in interesting_genes) {
     valid = c(valid, gene)
   }
 }
-interesting_genes = valid[1:5]
+interesting_genes = valid[1:10]
 
 marques_lognorm_filt = marques_lognorm[interesting_genes,]
 marques_bp_input = marques_lognorm_filt %>% t %>% as_tibble %>%
-  pivot_longer(interesting_genes[1]:interesting_genes[5],
+  pivot_longer(interesting_genes[1]:interesting_genes[10],
                values_to = "log2_norm_expr",
                names_to = "gene") %>% 
   mutate(source = "Marques et al.")
@@ -159,7 +161,7 @@ summary(rowMeans(bartosovic_lognorm))
 bartosovic_lognorm_filt = bartosovic_lognorm[interesting_genes,]
 
 bartosovic_bp_input = bartosovic_lognorm_filt %>% t %>% as_tibble %>%
-  pivot_longer(interesting_genes[1]:interesting_genes[5],
+  pivot_longer(interesting_genes[1]:interesting_genes[10],
                values_to = "log2_norm_expr",
                names_to = "gene") %>% 
   mutate(source = "Bartosovic et al.")
@@ -167,7 +169,6 @@ bartosovic_bp_input = bartosovic_lognorm_filt %>% t %>% as_tibble %>%
 # boxplot inputs
 bp_input = rbind(bartosovic_bp_input, marques_bp_input)
 bp_input = bp_input %>% dplyr::filter(log2_norm_expr > 0)
-
 
 # heatmap input (aggr. log2 norm. expression)
 bartosovic_means = rowMeans(bartosovic_lognorm_filt)
@@ -262,7 +263,7 @@ jitter = ggplot(bp_input, aes(x = order, y = log2_norm_expr)) +
       hjust = 1
     ),
     axis.text.y = element_text(size = 12, color = "black")
-  ) + stat_compare_means(label = "p.signif")
+  ) + stat_compare_means(aes(group = source), label = "p.signif")
 jitter = rasterize(jitter, layers='Point', dpi=300)
 
 ggsave(

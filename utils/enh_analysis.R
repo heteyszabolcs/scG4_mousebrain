@@ -31,6 +31,9 @@ cm_enh = "../data/bed/ESC_Enhancer_CruzMolina.active_mm10.bed"
 gl_enh = "../data/bed/GSE171771_FAIRE_STARR_enh_mESC.bed"
 ltrs = "../data/bed/RepMasker_lt200bp.LTRIS2.bed"
 
+# Cruz-Molina et al. mESC p300 ChIP-Seq peaks
+cm_p300 = "../data/GSE89211_CruzMolina/P300_results/mESC_p300_bothR1_R2.narrowPeak"
+
 ## data exploration on G4 peak set
 # G4 peak set
 g4_peaks = fread(g4_peaks)
@@ -48,8 +51,25 @@ cm_enh = GRanges(
   )
 )
 
+# p300
+cm_p300 = fread(cm_p300)
+cm_p300$V7 = "Cruz-Molina_p300"
+cm_p300 = GRanges(
+  seqnames = cm_p300$V1,
+  ranges = IRanges(
+    start = cm_p300$V2,
+    end = cm_p300$V3,
+    names = cm_p300$V7
+  )
+)
+
+# both p300 and enhancer
+p300_enh_ol = findOverlaps(cm_p300, cm_enh, type = "any", ignore.strand = FALSE)
+cm_enh_p300 = cm_p300[queryHits(p300_enh_ol)]
+
+
 # Marek's brain K27ac at mESC Cruz-Molina enhancers
-k27ac_enh = bw_loci(k27ac, loci = cm_enh)
+k27ac_enh = bw_loci(k27ac, loci = cm_enh_p300)
 k27ac_enh = as_tibble(k27ac_enh)
 k27ac_enh = k27ac_enh %>% dplyr::filter(possorted_RPGC > quantile(k27ac_enh$possorted_RPGC, 0.75))
 k27ac_enh$type = "Cruz-Molina_active_enh"
@@ -63,7 +83,7 @@ k27ac_enh = GRanges(
 )
 
 # mESC K27ac
-mesc_k27ac_enh = bw_loci(mesc_k27ac, loci = cm_enh)
+mesc_k27ac_enh = bw_loci(mesc_k27ac, loci = cm_enh_p300)
 mesc_k27ac_enh = as_tibble(mesc_k27ac_enh)
 mesc_k27ac_enh = mesc_k27ac_enh %>%
   na.omit()
@@ -81,7 +101,7 @@ mesc_k27ac_enh = GRanges(
   )
 )
 
-mesc_k27ac_enh2 = bw_loci(mesc_k27ac2, loci = cm_enh)
+mesc_k27ac_enh2 = bw_loci(mesc_k27ac2, loci = cm_enh_p300)
 mesc_k27ac_enh2 = as_tibble(mesc_k27ac_enh2)
 mesc_k27ac_enh2 = mesc_k27ac_enh2 %>%
   na.omit()
@@ -110,13 +130,13 @@ gl_enh = GRanges(
   )
 )
 
-# wigglescout analysis
+### wigglescout analysis
 scatter_function = function(bigwig) {
   p = plot_bw_bins_scatter(
     x = glue("{bigwigs}{bigwig}"),
     y = k27ac,
     genome = "mm10",
-    selection = k27ac_enh,
+    selection = cm_enh_p300,
     verbose = FALSE
   ) +
     ggrastr::geom_point_rast(color = "#636363") +
@@ -183,7 +203,6 @@ order = plot_input_res0.8 %>% group_by(cluster) %>% summarise(mean = mean(G4)) %
 order = factor(plot_input$cluster, levels = order)
 
 grouped_jitter1 = ggplot(plot_input, aes(x = order, y = G4, color = k27ac_source)) +
-  #geom_boxplot(outlier.shape = NA) +
   geom_point(position=position_jitterdodge(jitter.width = 0.15, dodge.width = 0.5), alpha = 1, pch = 19) +
   scale_color_manual(values = c("#bdbdbd", "#fec44f", "#9ecae1")) +
   ylim(0, 200) +
@@ -204,6 +223,39 @@ grouped_jitter1 = ggplot(plot_input, aes(x = order, y = G4, color = k27ac_source
 grouped_jitter1
 grouped_jitter1 = rasterize(grouped_jitter1, layers='Point', dpi=300)
 
+# make facet at level of clusters
+# comparison table for pairwise statistics
+comparisons = list(c("Martier et al.", "Creyghton et al."), 
+                       c("Creyghton et al.", "Bartosovic et al."), 
+                       c("Martier et al.", "Bartosovic et al."))
+
+order = plot_input %>% group_by(k27ac_source) %>% summarise(mean = mean(G4)) %>% 
+  arrange(desc(mean)) %>% pull(k27ac_source) 
+order = factor(plot_input$k27ac_source, levels = order)
+
+facet = ggplot(plot_input, aes(x = order, y = G4, color = k27ac_source)) +
+  geom_boxplot() +
+  facet_wrap(~ cluster) +
+  scale_color_manual(values = c("#bdbdbd", "#fec44f", "#9ecae1")) +
+  ylim(0, 200) +
+  labs(
+    title = "",
+    x = "",
+    y = "G4 signal",
+    color = "H3K27ac"
+  ) +
+  theme_classic() +
+  theme(
+    text = element_text(size = 9),
+    plot.title = element_text(size = 10),
+    axis.text.x = element_blank(),
+    axis.title.y = element_text(size = 15, color = "black"),
+    axis.text.y = element_text(size = 15, color = "black")
+  ) + stat_compare_means(comparisons = comparisons, label.y = c(150, 165, 180),
+                         label = "p.signif")
+facet
+facet = rasterize(facet, layers='Point', dpi=300)
+
 ggsave(
   glue("{result_folder}CM_enhancers-G4s_over_high_K27ac.png"),
   plot = grouped_jitter1,
@@ -215,6 +267,23 @@ ggsave(
 ggsave(
   glue("{result_folder}CM_enhancers-G4s_over_high_K27ac.pdf"),
   plot = grouped_jitter1,
+  device = "pdf",
+  width = 8,
+  height = 5,
+  dpi = 300,
+)
+
+ggsave(
+  glue("{result_folder}CM_enhancers-G4s_over_high_K27ac-facet.png"),
+  plot = facet,
+  width = 8,
+  height = 5,
+  dpi = 300,
+)
+
+ggsave(
+  glue("{result_folder}CM_enhancers-G4s_over_high_K27ac-facet.pdf"),
+  plot = facet,
   device = "pdf",
   width = 8,
   height = 5,
@@ -285,7 +354,7 @@ ggsave(
 
 # G4 length distributions
 hist = g4_peaks %>% mutate(diff = V3 - V2) %>%
-  dplyr::filter(V6 %in% c("0", "1", "2", "3", "4", "5", "6")) %>%
+  dplyr::filter(V6 %in% c("0", "1", "2", "3", "4")) %>%
   ggplot(., aes(x = diff, fill = V6)) +
   geom_histogram(position = "identity", alpha = 0.4) +
   geom_density(alpha = 1.0) +
@@ -384,6 +453,7 @@ get_signals = function(selected_cluster = "4") {
 
 # get signals test
 cl_4_spec = get_signals()
+cl_3_spec = get_signals(selected_cluster = "3")
 
 g4_gl_enh_quant = numeric()
 for (cluster in names(g4s_no_ol)) {
@@ -489,215 +559,3 @@ ggsave(
   device = "pdf"
 )
 
-## HOMER annotation of G4 peaks
-result_folder = "../results/Seurat/callpeaks_unsorted/peak_sets/"
-bw_folder = "../data/GSE157637/"
-reference = "mm10"
-
-annotation = function(narrowpeak = "0_peaks.narrowPeak",
-                      percentile = 0.75) {
-  cluster = strsplit(narrowpeak, ".narrowPeak")[[1]][1]
-  print(cluster)
-  np = fread(glue("{result_folder}{narrowpeak}"))
-  
-  # create narrowpeak table
-  np = np %>% dplyr::select(
-    chrom = V1,
-    start = V2,
-    end = V3,
-    name = V4,
-    score = V5,
-    strand = V6,
-    signalValue = V7,
-    pValue = V8,
-    qValue = V9,
-    peak = V10
-  ) %>%
-    separate(name, sep = "_" , into = c(".", "..", "name")) %>%
-    dplyr::select(-.,-..) %>%
-    mutate(start = as.character(start), end = as.character(end))
-  
-  # create HOMER input
-  # keep peak scores with above 75th percentile
-  np = np %>% dplyr::filter(signalValue >= quantile(signalValue, percentile))
-  write_tsv(np, glue("{result_folder}{cluster}_robust_peaks.bed"))
-  
-  bed_format = np %>% dplyr::select(chrom, start, end)
-  write_tsv(bed_format,
-            glue("{result_folder}{cluster}.bed"),
-            col_names = FALSE)
-  
-  # annotate by HOMER
-  bed_file = glue("{cluster}.bed")
-  system(
-    glue(
-      "annotatePeaks.pl {result_folder}{bed_file} {reference} > {result_folder}{cluster}_annot.tsv"
-    )
-  )
-  
-  # read annotated file
-  annot = fread(glue("{result_folder}{cluster}_annot.tsv"))
-  id_col = colnames(annot)[1]
-  
-  # assign MACS2 columns
-  annot = annot %>% mutate(Start = as.character(Start), End = as.character(End)) %>%
-    dplyr::select("PeakID" = all_of(id_col), everything()) %>%
-    mutate(PeakID = as.character(PeakID)) %>%
-    inner_join(., np, by = c("PeakID" = "name")) %>% dplyr::select(Chr,
-                                                                   Start,
-                                                                   End,
-                                                                   "Distance to TSS",
-                                                                   "Gene Name",
-                                                                   signalValue,
-                                                                   pValue,
-                                                                   qValue,
-                                                                   peak) %>%
-    
-    mutate(Seurat_cluster = cluster) %>%
-    separate(Seurat_cluster, sep = "_", into = "Seurat_cluster")
-  
-  # export
-  write_tsv(annot, glue("{result_folder}{cluster}_annot.tsv"))
-  
-  return(annot)
-  
-}
-
-# run on all narrowpeaks
-narrowpeaks = list.files(glue("{result_folder}"), pattern = "*.narrowPeak")
-lapply(narrowpeaks, annotation)
-
-# check package plyranges
-if("plyranges" %in% installed.packages()) {
-  print(" plyranges is OK")
-} else {
-  install.packages("plyranges")
-  library("plyranges")
-}
-
-## complete annotated peaks with enhancer signatures
-add_enhancer_status = function(annot_peak_file = "0_peaks_annot.tsv") {
-  print(annot_peak_file)
-  
-  annot = fread(glue("{result_folder}{annot_peak_file}"))
-  cluster = strsplit(annot_peak_file, split = "_peaks_annot.tsv")[[1]][1]
-  
-  # convert to GRanges object
-  annot_gr = GRanges(
-    seqnames = annot$Chr,
-    ranges = IRanges(
-      start = annot$Start,
-      end = annot$End,
-      names = annot$Seurat_cluster
-    )
-  )
-  
-  # intersect with Cruz-Molina enhancers
-  cm_int = suppressWarnings(findOverlaps(annot_gr, cm_enh, type = "any", minoverlap = 1))
-  annot = annot %>% mutate(Cruz_Molina_enh = "0")
-  for (hit in cm_int@from) {
-    annot[hit, which(colnames(annot) == "Cruz_Molina_enh")] = "1"
-  }
-  # intersect with Glaser enhancers
-  gl_int = suppressWarnings(findOverlaps(annot_gr, gl_enh, type = "any", minoverlap = 1))
-  annot = annot %>% mutate(Glaser_enh = "0")
-  for (hit in gl_int@from) {
-    annot[hit, which(colnames(annot) == "Glaser_enh")] = "1"
-  }
-  
-  # add Bartosovic et al. scCut&Tag data
-  require("wigglescout")
-  bws_ac = list.files(bw_folder, pattern = "*.bw", full.names = TRUE)
-  bws_ac = bws_ac[grep("H3K27ac", bws_ac)]
-  labels_ac = unname(sapply(bws_ac, function(x)
-    str_split(x, "//")[[1]][2]))
-  
-  bws_k4 = list.files(bw_folder, pattern = "*.bw", full.names = TRUE)
-  bws_k4 = bws_k4[grep("H3K4me3", bws_k4)]
-  labels_k4 = unname(sapply(bws_k4, function(x)
-    str_split(x, "//")[[1]][2]))
-  
-  # convert to GRanges object
-  annot_bed = annot[, 1:3]
-  annot_bed[["name"]] = cluster
-  annot_bed = GRanges(
-    seqnames = annot_bed$Chr,
-    ranges = IRanges(
-      start = annot_bed$Start,
-      end = annot_bed$End,
-      names = annot_bed$name
-    )
-  )
-  
-  # add metadata
-  annot_bed$Distance_to_TSS = annot$`Distance to TSS`
-  annot_bed$Gene_name = annot$`Gene Name`
-  annot_bed$signalValue = annot$signalValue
-  annot_bed$pValue = annot$pValue
-  annot_bed$qvalue = annot$qValue
-  annot_bed$peak = annot$peak
-  annot_bed$Seurat_cluster = annot$Seurat_cluster
-  annot_bed$Cruz_Molina_enh = annot$Cruz_Molina_enh
-  annot_bed$Glaser_enh = annot$Glaser_enh
-  
-  aggr_ac = suppressWarnings(bw_loci(bws_ac, annot_bed, labels = labels_ac))
-  # left join by plyranges
-  output = join_overlap_left_directed(annot_bed, aggr_ac)
-  
-  bws_k4 = bws_k4[!str_detect(bws_k4, "H3K4me3_Astrocytes")]
-  labels_k4 = labels_k4[!str_detect(labels_k4, "H3K4me3_Astrocytes")]
-  aggr_k4 = 
-    suppressWarnings(bw_loci(bws_k4, annot_bed, labels = labels_k4))
-  output = join_overlap_left_directed(output, aggr_k4)
-  output = as_tibble(output)
-
-# export
-write_tsv(output, glue("{result_folder}{cluster}_enh_anal.tsv"))
-
-return(output)
-
-}
-
-# run on all annotated peaks
-
-print(glue("####### {result_folder}"))
-annot_peaks = list.files(glue("{result_folder}"), pattern = "*peaks_annot.tsv")
-print(length(annot_peaks))
-lapply(annot_peaks, add_enhancer_status)
-
-enh_anals = list.files(glue("{result_folder}"), pattern = "*enh_anal.tsv")
-collect = lapply(enh_anals, function(x)
-  fread(glue("{result_folder}{x}")))
-collect = bind_rows(collect)
-
-## find G4 peaks near to LTR sequences
-ltrs = fread(ltrs)
-ltrs = GRanges(seqnames = ltrs$V1,
-               ranges = IRanges(
-                 start = ltrs$V2,
-                 end = ltrs$V3,
-                 names = rep("ltrs", nrow(ltrs))
-               ))
-
-sign_g4s = collect %>% dplyr::select(seqnames, start, end)
-sign_g4s = GRanges(
-  seqnames = sign_g4s$seqnames,
-  ranges = IRanges(
-    start = sign_g4s$start,
-    end = sign_g4s$end,
-    names = rep("G4", nrow(sign_g4s))
-  )
-)
-# expand G4 peaks
-sign_g4s = extendGR(sign_g4s, upstream = 500, downstream = 500)
-
-# overlap with LTRs
-ltr_ol = suppressWarnings(findOverlaps(sign_g4s, ltrs, type = "any", minoverlap = 1))
-
-collect = collect %>% mutate(LTR_vicinity = "0")
-for (hit in ltr_ol@from) {
-  collect[hit, which(colnames(collect) == "LTR_vicinity")] = "1"
-}
-
-write_tsv(collect,
-          glue("{result_folder}enhancer_analysis_output.tsv"))
