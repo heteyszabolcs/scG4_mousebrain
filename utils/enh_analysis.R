@@ -34,6 +34,22 @@ ltrs = "../data/bed/RepMasker_lt200bp.LTRIS2.bed"
 # Cruz-Molina et al. mESC p300 ChIP-Seq peaks
 cm_p300 = "../data/GSE89211_CruzMolina/P300_results/mESC_p300_bothR1_R2.narrowPeak"
 
+# cicero co-G4 networks extended with +/- 1000 bp
+load(file = "../results/Seurat/callpeaks_unsorted/unsorted_cicero_coG4networks.Rds")
+CCAN_assigns = CCAN_assigns %>% separate(Peak, c("chr", "start", "end"), sep = "-") %>% 
+  mutate(start = as.numeric(start), end = as.numeric(end)) %>% 
+  mutate(start = start - 1000, end = end + 1000)
+
+CCAN_assigns$type = "Cicero, co-G4 network"
+CCAN_assigns = GRanges(
+  seqnames = CCAN_assigns$chr,
+  ranges = IRanges(
+    start = CCAN_assigns$start,
+    end = CCAN_assigns$end,
+    names = CCAN_assigns$type
+  )
+)
+
 ## data exploration on G4 peak set
 # G4 peak set
 g4_peaks = fread(g4_peaks)
@@ -81,6 +97,30 @@ k27ac_enh = GRanges(
     names = k27ac_enh$type
   )
 )
+
+# Highly acetylated active enhancers colocalized with co-G4 sites
+k27ac_coG4 = findOverlaps(k27ac_enh, CCAN_assigns, type = "any", ignore.strand = FALSE)
+k27ac_coG4 = k27ac_enh[queryHits(k27ac_coG4)]
+
+load(file = "../results/Seurat/callpeaks_unsorted/unsorted_cicero.Rds")
+
+# visualization
+gene_anno = rtracklayer::readGFF("../data/gencode.vM10.annotation.gff3")
+
+gene_anno$chromosome = paste0("chr", gene_anno$seqid)
+gene_anno$gene = gene_anno$gene_id
+gene_anno$transcript = gene_anno$transcript_id
+gene_anno$symbol = gene_anno$gene_name
+
+pdf(file = "../results/genome_browser/Figure_3/unsorted_brain/cicero/Cicero_CCAN_chr3_9485472-9555738.pdf",   
+    width = 4, 
+    height = 4) 
+plot_connections(conns, "chr5", 64662854, 64743058,
+                 gene_model = as.data.frame(gene_anno),
+                 coaccess_cutoff = .0,
+                 connection_width = .5)
+dev.off()
+
 
 # mESC K27ac
 mesc_k27ac_enh = bw_loci(mesc_k27ac, loci = cm_enh_p300)
@@ -410,10 +450,8 @@ for (cluster in names(g4s_no_ol)) {
   g4_k27ac_cm_enh_quant = c(g4_k27ac_cm_enh_quant, length(ol))
 }
 
-get_signals = function(selected_cluster = "4") {
+get_signals_over_k27ac_enh = function(selected_cluster = "4") {
   require("wigglescout")
-  cl_cm_ol = suppressWarnings(subsetByOverlaps(g4_peaks[[selected_cluster]], k27ac_enh, type = "any", minoverlap = 1))
-  cl_cm_ol = as.tibble(cl_cm_ol)
   cl_cm_ol = suppressWarnings(subsetByOverlaps(g4_peaks[[selected_cluster]], k27ac_enh, type = "any", minoverlap = 1))
   cl_cm_ol = as.tibble(cl_cm_ol)
   
@@ -451,9 +489,54 @@ get_signals = function(selected_cluster = "4") {
   
 }
 
+get_signals_over_CCAN_enh = function(selected_cluster = "4") {
+  require("wigglescout")
+  cl_cicero_ol = suppressWarnings(subsetByOverlaps(g4_peaks[[selected_cluster]], k27ac_coG4, type = "any", minoverlap = 1))
+  cl_cicero_ol = as.tibble(cl_cicero_ol)
+  
+  bigwigs = c(
+    "../results/Seurat/final/unsorted_brain/res0.8/cluster_spec_bigwigs/0.bam_RPGC.bigwig",
+    "../results/Seurat/final/unsorted_brain/res0.8/cluster_spec_bigwigs/1.bam_RPGC.bigwig",
+    "../results/Seurat/final/unsorted_brain/res0.8/cluster_spec_bigwigs/2.bam_RPGC.bigwig",
+    "../results/Seurat/final/unsorted_brain/res0.8/cluster_spec_bigwigs/3.bam_RPGC.bigwig",
+    "../results/Seurat/final/unsorted_brain/res0.8/cluster_spec_bigwigs/4.bam_RPGC.bigwig",
+    k27ac
+  )
+  
+  bed = cl_cicero_ol[, 1:3]
+  write_tsv(
+    bed,
+    glue(
+      "../data/bed/cicero_CCAN_enh-unsorted_cluster{selected_cluster}.bed"
+    ),
+    col_names = FALSE
+  )
+  bed = glue("../data/bed/cicero_CCAN_enh-unsorted_cluster{selected_cluster}.bed")
+  selected_bw = glue("../results/Seurat/final/unsorted_brain/res0.8/cluster_spec_bigwigs/{selected_cluster}.bam_RPGC.bigwig")
+  bigwigs = c(bigwigs[which(bigwigs != selected_bw)], selected_bw)
+  
+  read_cov = bw_loci(bigwigs, loci = bed)
+  read_cov = as.data.frame(read_cov)
+  
+  columns = colnames(read_cov)[grepl("X", colnames(read_cov)[which(colnames(read_cov) != glue("X{selected_cluster}.bam_RPGC"))])]
+  read_cov_filt = read_cov %>% 
+    mutate(average = rowMeans(dplyr::select(., columns))) %>% 
+    mutate(enrichment = get(glue("X{selected_cluster}.bam_RPGC")) / average) %>% 
+    dplyr::filter(enrichment >= 10)
+  
+  return(read_cov_filt)
+  
+}
+
+
 # get signals test
-cl_4_spec = get_signals()
-cl_3_spec = get_signals(selected_cluster = "3")
+cl_4_spec = get_signals_over_k27ac_enh()
+cl_3_spec = get_signals_over_k27ac_enh(selected_cluster = "3")
+cl_0_spec_CCAN = get_signals_over_CCAN_enh(selected_cluster = "0")
+cl_1_spec_CCAN = get_signals_over_CCAN_enh(selected_cluster = "1")
+cl_2_spec_CCAN = get_signals_over_CCAN_enh(selected_cluster = "2")
+cl_3_spec_CCAN = get_signals_over_CCAN_enh(selected_cluster = "3")
+cl_4_spec_CCAN = get_signals_over_CCAN_enh(selected_cluster = "4")
 
 g4_gl_enh_quant = numeric()
 for (cluster in names(g4s_no_ol)) {
