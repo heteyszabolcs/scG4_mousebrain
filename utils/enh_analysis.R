@@ -11,6 +11,7 @@ suppressPackageStartupMessages({
   library("wigglescout")
   library("ggpubr")
   library("ggrastr")
+  library("cicero")
   #library("ArchR")
 })
 
@@ -27,15 +28,20 @@ mesc_k27ac2 = "../data/bw/Creyghton_et_al_mESC_H3K27ac.bw"
 
 # data
 g4_peaks = "../results/Seurat/final/unsorted_brain/res0.8/cluster_spec_peaks/peaks_per_clusters.bed"
+
+# enhancers
 cm_enh = "../data/bed/ESC_Enhancer_CruzMolina.active_mm10.bed"
 gl_enh = "../data/bed/GSE171771_FAIRE_STARR_enh_mESC.bed"
-ltrs = "../data/bed/RepMasker_lt200bp.LTRIS2.bed"
+li_enh = "../data/bed/Li_et_al-mousebrain.union.cCRE.bed"
 
 # Cruz-Molina et al. mESC p300 ChIP-Seq peaks
 cm_p300 = "../data/GSE89211_CruzMolina/P300_results/mESC_p300_bothR1_R2.narrowPeak"
 
+# cicero object (coming from cicero.R)
+load(file = "../results/Seurat/callpeaks_unsorted/unsorted_cicero.Rds")
 # cicero co-G4 networks extended with +/- 1000 bp
 load(file = "../results/Seurat/callpeaks_unsorted/unsorted_cicero_coG4networks.Rds")
+
 CCAN_assigns = CCAN_assigns %>% separate(Peak, c("chr", "start", "end"), sep = "-") %>% 
   mutate(start = as.numeric(start), end = as.numeric(end)) %>% 
   mutate(start = start - 1000, end = end + 1000)
@@ -55,7 +61,7 @@ CCAN_assigns = GRanges(
 g4_peaks = fread(g4_peaks)
 g4_peaks$V7 = "G4"
 
-# enhancer sets (mESC Cruz-Molina and Glaser)
+## enhancer sets (mESC Cruz-Molina et al. https://pubmed.ncbi.nlm.nih.gov/28285903/, Li et al. http://catlas.org/mousebrain/#!/)
 cm_enh = fread(cm_enh)
 cm_enh$V6 = "Cruz-Molina_active_enh"
 cm_enh = GRanges(
@@ -67,7 +73,7 @@ cm_enh = GRanges(
   )
 )
 
-# p300
+# p300 (mESC Cruz-Molina)
 cm_p300 = fread(cm_p300)
 cm_p300$V7 = "Cruz-Molina_p300"
 cm_p300 = GRanges(
@@ -79,12 +85,25 @@ cm_p300 = GRanges(
   )
 )
 
+li_enh = fread(li_enh)
+li_enh$V5 = "Li_enh"
+li_enh = GRanges(
+  seqnames = li_enh$V1,
+  ranges = IRanges(
+    start = li_enh$V2,
+    end = li_enh$V3,
+    names = li_enh$V5
+  )
+)
+
 # both p300 and enhancer
 p300_enh_ol = findOverlaps(cm_p300, cm_enh, type = "any", ignore.strand = FALSE)
 cm_enh_p300 = cm_p300[queryHits(p300_enh_ol)]
 
+# both Cruz-Molina et al enhancer and Li et al cCRE
+li_cm_enh = findOverlaps(li_enh, cm_enh, type = "any", ignore.strand = FALSE)
 
-# Marek's brain K27ac at mESC Cruz-Molina enhancers
+# Marek Bartosovic's brain K27ac at mESC Cruz-Molina enhancers
 k27ac_enh = bw_loci(k27ac, loci = cm_enh_p300)
 k27ac_enh = as_tibble(k27ac_enh)
 k27ac_enh = k27ac_enh %>% dplyr::filter(possorted_RPGC > quantile(k27ac_enh$possorted_RPGC, 0.75))
@@ -102,9 +121,7 @@ k27ac_enh = GRanges(
 k27ac_coG4 = findOverlaps(k27ac_enh, CCAN_assigns, type = "any", ignore.strand = FALSE)
 k27ac_coG4 = k27ac_enh[queryHits(k27ac_coG4)]
 
-load(file = "../results/Seurat/callpeaks_unsorted/unsorted_cicero.Rds")
-
-# visualization
+# cicero visualization
 gene_anno = rtracklayer::readGFF("../data/gencode.vM10.annotation.gff3")
 
 gene_anno$chromosome = paste0("chr", gene_anno$seqid)
@@ -112,18 +129,31 @@ gene_anno$gene = gene_anno$gene_id
 gene_anno$transcript = gene_anno$transcript_id
 gene_anno$symbol = gene_anno$gene_name
 
-pdf(file = "../results/genome_browser/Figure_3/unsorted_brain/cicero/Cicero_CCAN_chr3_9485472-9555738.pdf",   
+pdf(file = "../results/genome_browser/Figure_3/unsorted_brain/cicero/Cicero_CCAN_chr14_40921407-40991703_cl0.pdf",   
     width = 4, 
     height = 4) 
-plot_connections(conns, "chr5", 64662854, 64743058,
+plot_connections(conns, "chr14", 40921407, 40991703,
                  gene_model = as.data.frame(gene_anno),
                  coaccess_cutoff = .0,
                  connection_width = .5)
 dev.off()
 
+# Marek's brain K27ac at mouse brain Li enhancers
+k27ac_li_enh = bw_loci(k27ac, loci = li_enh)
+k27ac_li_enh = as_tibble(k27ac_li_enh)
+k27ac_li_enh = k27ac_li_enh %>% dplyr::filter(possorted_RPGC > quantile(k27ac_li_enh$possorted_RPGC, 0.75))
+k27ac_li_enh$type = "Cruz-Molina_active_enh"
+k27ac_li_enh = GRanges(
+  seqnames = k27ac_li_enh$seqnames,
+  ranges = IRanges(
+    start = k27ac_li_enh$start,
+    end = k27ac_li_enh$end,
+    names = k27ac_li_enh$type
+  )
+)
 
 # mESC K27ac
-mesc_k27ac_enh = bw_loci(mesc_k27ac, loci = cm_enh_p300)
+mesc_k27ac_enh = bw_loci(mesc_k27ac, loci = li_enh)
 mesc_k27ac_enh = as_tibble(mesc_k27ac_enh)
 mesc_k27ac_enh = mesc_k27ac_enh %>%
   na.omit()
@@ -141,7 +171,7 @@ mesc_k27ac_enh = GRanges(
   )
 )
 
-mesc_k27ac_enh2 = bw_loci(mesc_k27ac2, loci = cm_enh_p300)
+mesc_k27ac_enh2 = bw_loci(mesc_k27ac2, loci = li_enh)
 mesc_k27ac_enh2 = as_tibble(mesc_k27ac_enh2)
 mesc_k27ac_enh2 = mesc_k27ac_enh2 %>%
   na.omit()
@@ -158,36 +188,29 @@ mesc_k27ac_enh2 = GRanges(
   )
 )
 
-# Glaser et al enhancer set
-gl_enh = fread(gl_enh)
-gl_enh$V6 = "Glaser_active_enh"
-gl_enh = GRanges(
-  seqnames = gl_enh$V1,
-  ranges = IRanges(
-    start = gl_enh$V2,
-    end = gl_enh$V3,
-    names = gl_enh$V6
-  )
-)
+
 
 ### wigglescout analysis
 scatter_function = function(bigwig) {
-  p = plot_bw_bins_scatter(
-    x = glue("{bigwigs}{bigwig}"),
-    y = k27ac,
-    genome = "mm10",
-    selection = cm_enh_p300,
-    verbose = FALSE
-  ) +
-    ggrastr::geom_point_rast(color = "#636363") +
+  
+  df = bw_loci(c(glue("{bigwigs}{bigwig}"), k27ac), loci = li_enh)
+  df = as.data.frame(df)
+  df[["label"]] = ""
+  df$label[queryHits(li_cm_enh)] = "mESC enh"
+  df = df %>% dplyr::select("G4" = starts_with("X"), "H3K27ac" = possorted_RPGC, label)
+  df = df %>% arrange(label)
+  
+  p = ggplot(df, aes(x = G4, y = H3K27ac, colour = label)) +
+    geom_point() +
     labs(
       title = bigwig,
       x = "G4",
       y = "H3K27ac (Bartosovic et al.)",
       color = ""
     ) +
-    xlim(0,30) +
-    ylim(0,30) +
+    xlim(0,200) +
+    ylim(0,200) +
+    scale_color_manual(values = c('#bdbdbd','#de2d26')) +
     theme_classic() +
     theme(
       text = element_text(size = 20),
@@ -196,8 +219,8 @@ scatter_function = function(bigwig) {
       axis.text.y = element_text(size = 15, color = "black")
     ) + stat_cor(
       method = "pearson",
-      label.x = 15,
-      label.y = 20,
+      label.x = 150,
+      label.y = 150,
       size = 5,
       p.accuracy = 0.001
     )
@@ -206,7 +229,7 @@ scatter_function = function(bigwig) {
 }
 
 bigwig_samples = list.files(bigwigs, full.names = TRUE)
-plot_input = bw_loci(bigwig_samples, loci = k27ac_enh)
+plot_input = bw_loci(bigwig_samples, loci = k27ac_li_enh)
 plot_input = as_tibble(plot_input)
 plot_input_res0.8 = plot_input %>% 
   dplyr::select(seqnames, start, end, "0" = X0.bam_RPGC, "1" = X1.bam_RPGC, "2" = X2.bam_RPGC, "3" = X3.bam_RPGC, "4" = X4.bam_RPGC) %>% 
@@ -263,21 +286,23 @@ grouped_jitter1 = ggplot(plot_input, aes(x = order, y = G4, color = k27ac_source
 grouped_jitter1
 grouped_jitter1 = rasterize(grouped_jitter1, layers='Point', dpi=300)
 
-# make facet at level of clusters
+# make boxplot facet at level of clusters
 # comparison table for pairwise statistics
 comparisons = list(c("Martier et al.", "Creyghton et al."), 
                        c("Creyghton et al.", "Bartosovic et al."), 
                        c("Martier et al.", "Bartosovic et al."))
 
-order = plot_input %>% group_by(k27ac_source) %>% summarise(mean = mean(G4)) %>% 
+# remove outliers
+plot_input_cut = plot_input %>% dplyr::filter(G4 < quantile(G4, 0.75))
+order = plot_input_cut %>% group_by(k27ac_source) %>% summarise(mean = mean(G4)) %>% 
   arrange(desc(mean)) %>% pull(k27ac_source) 
-order = factor(plot_input$k27ac_source, levels = order)
+order = factor(plot_input_cut$k27ac_source, levels = order)
 
-facet = ggplot(plot_input, aes(x = order, y = G4, color = k27ac_source)) +
+facet = ggplot(plot_input_cut, aes(x = order, y = G4, color = k27ac_source)) +
   geom_boxplot() +
   facet_wrap(~ cluster) +
   scale_color_manual(values = c("#bdbdbd", "#fec44f", "#9ecae1")) +
-  ylim(0, 200) +
+  #ylim(0, 25) +
   labs(
     title = "",
     x = "",
@@ -291,7 +316,7 @@ facet = ggplot(plot_input, aes(x = order, y = G4, color = k27ac_source)) +
     axis.text.x = element_blank(),
     axis.title.y = element_text(size = 15, color = "black"),
     axis.text.y = element_text(size = 15, color = "black")
-  ) + stat_compare_means(comparisons = comparisons, label.y = c(150, 165, 180),
+  ) + stat_compare_means(comparisons = comparisons,
                          label = "p.signif")
 facet
 facet = rasterize(facet, layers='Point', dpi=300)
@@ -317,7 +342,7 @@ ggsave(
   glue("{result_folder}CM_enhancers-G4s_over_high_K27ac-facet.png"),
   plot = facet,
   width = 8,
-  height = 5,
+  height = 8,
   dpi = 300,
 )
 
@@ -326,7 +351,7 @@ ggsave(
   plot = facet,
   device = "pdf",
   width = 8,
-  height = 5,
+  height = 8,
   dpi = 300,
 )
 
@@ -373,10 +398,11 @@ ggsave(
 bigwig_samples = c("0.bam_RPGC.bigwig", "1.bam_RPGC.bigwig", "2.bam_RPGC.bigwig", "3.bam_RPGC.bigwig", "4.bam_RPGC.bigwig")
 scatters = lapply(bigwig_samples, scatter_function)
 scatters = ggarrange(plotlist = scatters)
+scatters = rasterize(scatters, layers='Point', dpi = 500)
 scatters
 
 ggsave(
-  glue("{result_folder}CM_enhancers-K27ac_scatters.png"),
+  glue("{result_folder}Li_enhancers-K27ac_scatters.png"),
   plot = scatters,
   width = 12,
   height = 8,
@@ -384,7 +410,7 @@ ggsave(
 )
 
 ggsave(
-  glue("{result_folder}CM_enhancers-K27ac_scatters.pdf"),
+  glue("{result_folder}Li_enhancers-K27ac_scatters.pdf"),
   plot = scatters,
   device = "pdf",
   width = 12,
@@ -522,27 +548,23 @@ get_signals_over_CCAN_enh = function(selected_cluster = "4") {
   read_cov_filt = read_cov %>% 
     mutate(average = rowMeans(dplyr::select(., columns))) %>% 
     mutate(enrichment = get(glue("X{selected_cluster}.bam_RPGC")) / average) %>% 
-    dplyr::filter(enrichment >= 10)
+    dplyr::filter(enrichment >= 5)
   
   return(read_cov_filt)
   
 }
 
 
-# get signals test
+# get signals 
 cl_4_spec = get_signals_over_k27ac_enh()
 cl_3_spec = get_signals_over_k27ac_enh(selected_cluster = "3")
+
+# cluster-specific CCAN
 cl_0_spec_CCAN = get_signals_over_CCAN_enh(selected_cluster = "0")
 cl_1_spec_CCAN = get_signals_over_CCAN_enh(selected_cluster = "1")
 cl_2_spec_CCAN = get_signals_over_CCAN_enh(selected_cluster = "2")
 cl_3_spec_CCAN = get_signals_over_CCAN_enh(selected_cluster = "3")
 cl_4_spec_CCAN = get_signals_over_CCAN_enh(selected_cluster = "4")
-
-g4_gl_enh_quant = numeric()
-for (cluster in names(g4s_no_ol)) {
-  ol = suppressWarnings(findOverlaps(g4_peaks[[cluster]], gl_enh, type = "any", minoverlap = 1))
-  g4_gl_enh_quant = c(g4_gl_enh_quant, length(ol))
-}
 
 clusters = c("0", "1", "2", "3", "4")
 cm_bar = tibble(
@@ -594,49 +616,6 @@ print(glue("Average peak number over active enhancer: {round(mean(cm_bar_input$o
 ggsave(
   glue("{result_folder}G4_overlaps_w_CruzM_active_enh.pdf"),
   plot = cm_bar,
-  width = 10,
-  height = 7,
-  device = "pdf"
-)
-
-clusters = c("0", "1", "2", "3", "4")
-gl_bar = tibble(
-  overlap = g4_gl_enh_quant,
-  peak_count = sapply(clusters, function(x) length(g4_peaks[[which(names(g4_peaks) == x)]])),
-  enhancer_ratio = (overlap / peak_count) * 100,
-  cluster = names(g4s_no_ol),
-  fill_col = names(g4s_no_ol)
-) %>%
-  ggplot(data = ., aes(
-    x = reorder(cluster,-enhancer_ratio),
-    y = enhancer_ratio,
-    fill = fill_col
-  )) +
-  geom_bar(stat = "identity",
-           width = 0.5,
-           color = "black") +
-  scale_fill_brewer(palette = "YlOrRd") +
-  scale_y_continuous(limits = c(0, 0.5), breaks = seq(0, 0.5, 0.1)) +
-  labs(
-    title = expression(paste(
-      "G4 overlaps with active enhancers of ",
-      italic("Glaser et al.")
-    )),
-    x = "Seurat cluster",
-    y = "active enhancer %",
-    fill = "Seurat cluster"
-  ) +
-  theme_classic() +
-  theme(
-    text = element_text(size = 20),
-    plot.title = element_text(size = 15),
-    axis.text.x = element_text(size = 13, color = "black")
-  )
-gl_bar
-
-ggsave(
-  glue("{result_folder}G4_overlaps_w_Glaser_active_enh.pdf"),
-  plot = gl_bar,
   width = 10,
   height = 7,
   device = "pdf"
