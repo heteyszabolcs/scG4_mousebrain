@@ -362,7 +362,7 @@ jitter1 = ggplot(plot_input_res0.8, aes(x = order, y = G4)) +
  geom_jitter(color = "#bdbdbd") +
   ylim(0, 200) +
   labs(
-    title = "Cruz-Molina et al. enhancers with high K27ac in mouse brain",
+    title = "Li et al. cCRE with high K27ac in mouse brain",
     x = "",
     y = "G4 signal"
   ) +
@@ -378,7 +378,7 @@ jitter1
 jitter1 = rasterize(jitter1, layers='Point', dpi=300)
 
 ggsave(
-  glue("{result_folder}CM_enhancers-G4s_over_high_Bartosovic_K27ac.png"),
+  glue("{result_folder}Li_enhancers-G4s_over_high_Bartosovic_K27ac.png"),
   plot = jitter1,
   width = 8,
   height = 5,
@@ -386,7 +386,7 @@ ggsave(
 )
 
 ggsave(
-  glue("{result_folder}CM_enhancers-G4s_over_high_Bartosovic_K27ac.pdf"),
+  glue("{result_folder}Li_enhancers-G4s_over_high_Bartosovic_K27ac.pdf"),
   plot = jitter1,
   device = "pdf",
   width = 8,
@@ -404,7 +404,7 @@ scatters
 ggsave(
   glue("{result_folder}Li_enhancers-K27ac_scatters.png"),
   plot = scatters,
-  width = 12,
+  width = 16,
   height = 8,
   dpi = 300,
 )
@@ -413,7 +413,7 @@ ggsave(
   glue("{result_folder}Li_enhancers-K27ac_scatters.pdf"),
   plot = scatters,
   device = "pdf",
-  width = 12,
+  width = 16,
   height = 8,
   dpi = 300,
 )

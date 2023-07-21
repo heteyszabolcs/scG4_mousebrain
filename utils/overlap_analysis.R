@@ -12,11 +12,12 @@ suppressPackageStartupMessages({
   library("TxDb.Mmusculus.UCSC.mm10.knownGene")
   library("biomaRt")
   library("cotools")
-  library("GenometriCorr")
+  library("ComplexHeatmap")
+  library("circlize")
 })
 
 # result / peak folder
-peak_folder = "../results/Seurat/callpeaks_unsorted/peak_sets/"
+peak_folder = "../results/Seurat/final/unsorted_brain/res0.1/cluster_spec_peaks/"
 bed_folder = "../data/bed/"
 result_folder = "../results/GenomicRanges/unsorted_outputs/"
 
@@ -76,66 +77,7 @@ create_venn = function(peak1,
   
 }
 
-# list of narrowpeaks
-narrowpeaks = list.files(glue("{peak_folder}"), pattern = "*.narrowPeak")
-
-### scCnT mESC-MEF - bulk_CnT_G4_mES_mm10
-create_venn(
-  peak1 = "0_peaks.narrowPeak",
-  peak2 = "bulk_CnT_G4_mES_mm10.bed",
-  type1 = "scCnT mESC-MEF",
-  type2 = "bulk CnT mESC",
-  filename = "cluster0_vs_mESC_CnT-Venn.pdf"
-)
-
-create_venn(
-  peak1 = "1_peaks.narrowPeak",
-  peak2 = "bulk_CnT_G4_mES_mm10.bed",
-  type1 = "scCnT mESC-MEF",
-  type2 = "bulk CnT mESC",
-  filename = "cluster1_vs_mESC_CnT-Venn.pdf"
-)
-
-create_venn(
-  peak1 = "2_peaks.narrowPeak",
-  peak2 = "bulk_CnT_G4_mES_mm10.bed",
-  type1 = "scCnT mESC-MEF",
-  type2 = "bulk CnT mESC",
-  filename = "cluster2_vs_mESC_CnT-Venn.pdf"
-)
-
-create_venn(
-  peak1 = "3_peaks.narrowPeak",
-  peak2 = "bulk_CnT_G4_mES_mm10.bed",
-  type1 = "scCnT mESC-MEF",
-  type2 = "bulk CnT mESC",
-  filename = "cluster3_vs_mESC_CnT-Venn.pdf"
-)
-
-create_venn(
-  peak1 = "4_peaks.narrowPeak",
-  peak2 = "bulk_CnT_G4_mES_mm10.bed",
-  type1 = "scCnT mESC-MEF",
-  type2 = "bulk CnT mESC",
-  filename = "cluster4_vs_mESC_CnT-Venn.pdf"
-)
-
-create_venn(
-  peak1 = "5_peaks.narrowPeak",
-  peak2 = "bulk_CnT_G4_mES_mm10.bed",
-  type1 = "scCnT mESC-MEF",
-  type2 = "bulk CnT mESC",
-  filename = "cluster5_vs_mESC_CnT-Venn.pdf"
-)
-
-create_venn(
-  peak1 = "6_peaks.narrowPeak",
-  peak2 = "bulk_CnT_G4_mES_mm10.bed",
-  type1 = "scCnT mESC-MEF",
-  type2 = "bulk CnT mESC",
-  filename = "cluster6_vs_mESC_CnT-Venn.pdf"
-)
-
+# mESC-MEF scCut&Tag data
 # cluster 0 and cluster 1 of Seurat clustering with resolution 0.1
 create_venn(
   peak1 = "0_peaks_res0.1.narrowPeak",
@@ -176,21 +118,21 @@ cluster1 = GRanges(
   )
 )
 
-bulk_peak = fread("../data/bed/bulk_CnT_G4_mES_mm10.bed")
-bulk_peak$type = "mESC_bulk_CnT"
-bulk_peak = GRanges(
-  seqnames = bulk_peak$V1,
+bulk_mesc_peak = fread("../data/bed/bulk_CnT_G4_mES_mm10.bed")
+bulk_mesc_peak$type = "mESC_bulk_CnT"
+bulk_mesc_peak = GRanges(
+  seqnames = bulk_mesc_peak$V1,
   ranges = IRanges(
-    start = bulk_peak$V2,
-    end = bulk_peak$V3,
-    names = bulk_peak$type,
+    start = bulk_mesc_peak$V2,
+    end = bulk_mesc_peak$V3,
+    names = bulk_mesc_peak$type,
   )
 )
 
 cluster0$type = "cluster_0"
 cluster1$type = "cluster_1"
-bulk_peak$type = "mESC_bulk_CnT"
-gr = c(cluster0, cluster1, bulk_peak)
+bulk_mesc_peak$type = "mESC_bulk_CnT"
+gr = c(cluster0, cluster1, bulk_mesc_peak)
 grl = splitAsList(gr, gr$type)
 grl = unique(grl)
 
@@ -237,14 +179,14 @@ cluster1 = GRanges(
   )
 )
 
-bulk_peak = fread("../data/bed/bulk_G4_CnT_MEF_rep1_R1.mLb.clN_peaks.broadPeak")
-bulk_peak$type = "MEF_bulk_CnT"
-bulk_peak = GRanges(
-  seqnames = bulk_peak$V1,
+bulk_mef_peak = fread("../data/bed/bulk_G4_CnT_MEF_rep1_R1.mLb.clN_peaks.broadPeak")
+bulk_mef_peak$type = "MEF_bulk_CnT"
+bulk_mef_peak = GRanges(
+  seqnames = bulk_mef_peak$V1,
   ranges = IRanges(
-    start = bulk_peak$V2,
-    end = bulk_peak$V3,
-    names = bulk_peak$type,
+    start = bulk_mef_peak$V2,
+    end = bulk_mef_peak$V3,
+    names = bulk_mef_peak$type,
   )
 )
 
@@ -275,8 +217,53 @@ v <- venn_cnt2venn(res$vennCounts)
 print(plot(v, doWeights = FALSE))
 dev.off()
 
+## mESC - MEF - G4 scCut&Tag Jaccard analysis
+# jaccard indices (package cotools) and GenometriCorrelation analysis (package GenometriCorr)
+peaks = list(cluster0, cluster1, bulk_mesc_peak, bulk_mef_peak)
+jaccards = matrix(NA_real_, length(peaks), length(peaks))
+colnames(jaccards) = c("cluster 0", "cluster 1", "bulk mESC CnT", "bulk MEF CnT")
+rownames(jaccards) = c("cluster 0", "cluster 1", "bulk mESC CnT", "bulk MEF CnT")
+for(i in seq(1, ncol(jaccards))) {
+  for(j in seq(1, nrow(jaccards))) {
+    jaccard = genomicCorr.jaccard(peaks[[i]], peaks[[j]])
+    jaccards[i, j] = jaccard
+  }
+}
+is.matrix(jaccards)
+
+pdf(
+  file = "../results/GenomicRanges/mESC-MEF_outputs/mESC_MEF_res0.1_Jaccard_hm.pdf",
+  width = 6,
+  height = 6
+)
+col_fun = colorRamp2(c(0, 0.25, 0.5), c("#9ecae1", "white", "#fc9272"))
+Heatmap(
+  jaccards,
+  column_title = "",
+  row_title = "",
+  name = "Jaccard index",
+  # row_km = 2,
+  # column_km = 1,
+  clustering_method_rows = "complete",
+  col = col_fun,
+  rect_gp = gpar(col = "black", lwd = 0.1),
+  #top_annotation = ha,
+  show_column_dend = TRUE,
+  cluster_columns = TRUE,
+  cluster_rows = TRUE,
+  show_row_dend = TRUE,
+  heatmap_width = unit(8, "cm"),
+  heatmap_height = unit(8, "cm"),
+  row_names_gp = gpar(fontsize = 10),
+  column_names_gp = gpar(fontsize = 10),
+  column_names_rot = 90,
+  cell_fun = function(j, i, x, y, width, height, fill) {
+    grid.text(sprintf("%.2f", jaccards[i, j]), x, y, gp = gpar(fontsize = 10))}
+)
+dev.off()
+
 # Venn with 3 sets - bulk NPC and cluster0/1 of unsorted scCnT
-cluster0_unsorted = fread("../results/Seurat/callpeaks_unsorted/peak_sets/0_peaks_res0.1.narrowPeak")
+cluster0_unsorted = fread("../results/Seurat/final/unsorted_brain/res0.1/cluster_spec_peaks/0_peaks.narrowPeak")
 cluster0_unsorted$type = "cluster0"
 cluster0_unsorted = GRanges(
   seqnames = cluster0_unsorted$V1,
@@ -287,7 +274,7 @@ cluster0_unsorted = GRanges(
   )
 )
 
-cluster1_unsorted = fread("../results/Seurat/callpeaks_unsorted/peak_sets/1_peaks_res0.1.narrowPeak")
+cluster1_unsorted = fread("../results/Seurat/final/unsorted_brain/res0.1/cluster_spec_peaks/1_peaks.narrowPeak")
 cluster1_unsorted$type = "cluster1"
 cluster1_unsorted = GRanges(
   seqnames = cluster1_unsorted$V1,
@@ -298,21 +285,21 @@ cluster1_unsorted = GRanges(
   )
 )
 
-bulk_peak = fread("../data/bed/bulk_CnT_G4_NPC_mm10.bed")
-bulk_peak$type = "NPC_bulk_CnT"
-bulk_peak = GRanges(
-  seqnames = bulk_peak$V1,
+bulk_npc_peak = fread("../data/bed/bulk_CnT_G4_NPC_mm10.bed")
+bulk_npc_peak$type = "NPC_bulk_CnT"
+bulk_npc_peak = GRanges(
+  seqnames = bulk_npc_peak$V1,
   ranges = IRanges(
-    start = bulk_peak$V2,
-    end = bulk_peak$V3,
-    names = bulk_peak$type,
+    start = bulk_npc_peak$V2,
+    end = bulk_npc_peak$V3,
+    names = bulk_npc_peak$type,
   )
 )
 
 cluster0_unsorted$type = "cluster_0"
 cluster1_unsorted$type = "cluster_1"
 bulk_peak$type = "NPC_bulk_CnT"
-gr = c(cluster0_unsorted, cluster1_unsorted, bulk_peak)
+gr = c(cluster0_unsorted, cluster1_unsorted, bulk_npc_peak)
 grl = splitAsList(gr, gr$type)
 grl = unique(grl)
 
@@ -327,7 +314,7 @@ venn_cnt2venn <- function(venn_cnt) {
 }
 
 pdf(
-  file = glue("{result_folder}bulk_NPC_MEF-MESCcluster0_1.pdf"),
+  file = glue("{result_folder}bulk_NPC_unsorted_cluster0_1.pdf"),
   # The directory you want to save the file in
   width = 8,
   height = 8
@@ -337,7 +324,7 @@ print(plot(v, doWeights = FALSE))
 dev.off()
 
 # Venn with 3 sets - bulk neuron and cluster0/1 of unsorted scCnT
-cluster0_unsorted = fread("../results/Seurat/callpeaks_unsorted/peak_sets/0_peaks_res0.1.narrowPeak")
+cluster0_unsorted = fread("../results/Seurat/final/unsorted_brain/res0.1/cluster_spec_peaks/0_peaks.narrowPeak")
 cluster0_unsorted$type = "cluster0"
 cluster0_unsorted = GRanges(
   seqnames = cluster0_unsorted$V1,
@@ -348,7 +335,7 @@ cluster0_unsorted = GRanges(
   )
 )
 
-cluster1_unsorted = fread("../results/Seurat/callpeaks_unsorted/peak_sets/1_peaks_res0.1.narrowPeak")
+cluster1_unsorted = fread("../results/Seurat/final/unsorted_brain/res0.1/cluster_spec_peaks/1_peaks.narrowPeak")
 cluster1_unsorted$type = "cluster1"
 cluster1_unsorted = GRanges(
   seqnames = cluster1_unsorted$V1,
@@ -359,21 +346,21 @@ cluster1_unsorted = GRanges(
   )
 )
 
-bulk_peak = fread("../data/bed/bulk_CnT_G4_neuron_mm10.bed")
-bulk_peak$type = "neuron_bulk_CnT"
-bulk_peak = GRanges(
-  seqnames = bulk_peak$V1,
+bulk_neuron_peak = fread("../data/bed/bulk_CnT_G4_neuron_mm10.bed")
+bulk_neuron_peak$type = "neuron_bulk_CnT"
+bulk_neuron_peak = GRanges(
+  seqnames = bulk_neuron_peak$V1,
   ranges = IRanges(
-    start = bulk_peak$V2,
-    end = bulk_peak$V3,
-    names = bulk_peak$type,
+    start = bulk_neuron_peak$V2,
+    end = bulk_neuron_peak$V3,
+    names = bulk_neuron_peak$type,
   )
 )
 
 cluster0_unsorted$type = "cluster_0"
 cluster1_unsorted$type = "cluster_1"
 bulk_peak$type = "neuron_bulk_CnT"
-gr = c(cluster0_unsorted, cluster1_unsorted, bulk_peak)
+gr = c(cluster0_unsorted, cluster1_unsorted, bulk_neuron_peak)
 grl = splitAsList(gr, gr$type)
 grl = unique(grl)
 
@@ -397,220 +384,51 @@ v <- venn_cnt2venn(res$vennCounts)
 print(plot(v, doWeights = FALSE))
 dev.off()
 
+## NPC - neuron - brain G4 scCut&Tag Jaccard analysis
 # jaccard indices (package cotools) and GenometriCorrelation analysis (package GenometriCorr)
-genomicCorr.jaccard(cluster0, bulk_peak)
-genomicCorr.jaccard(cluster1, bulk_peak)
-genomicCorr.jaccard(cluster1, cluster0)
+peaks = list(cluster0_unsorted, cluster1_unsorted, bulk_neuron_peak, bulk_npc_peak)
+jaccards = matrix(NA_real_, length(peaks), length(peaks))
+colnames(jaccards) = c("cluster 0", "cluster 1", "bulk neuron CnT", "bulk NPC CnT")
+rownames(jaccards) = c("cluster 0", "cluster 1", "bulk neuron CnT", "bulk NPC CnT")
+for(i in seq(1, ncol(jaccards))) {
+  for(j in seq(1, nrow(jaccards))) {
+    jaccard = genomicCorr.jaccard(peaks[[i]], peaks[[j]])
+    jaccards[i, j] = jaccard
+  }
+}
+is.matrix(jaccards)
 
-# cl1_report = GenometriCorrelation(cluster1, bulk_peak)
-# graphical.report(cl1_report,
-#                  pdffile = glue("{result_folder}cl1_report.pdf"),
-#                  show.all = TRUE)
-
-esc_cnt = fread("../data/bed/bulk_CnT_G4_mES_mm10.bed")
-esc_cnt$type = "bulk_mESC"
-esc_cnt = GRanges(
-  seqnames = esc_cnt$V1,
-  ranges = IRanges(
-    start = esc_cnt$V2,
-    end = esc_cnt$V3,
-    names = esc_cnt$type,
-  )
+pdf(
+  file = glue("{result_folder}unsorted_res0.1_Jaccard_hm.pdf"),
+  width = 6,
+  height = 6
 )
-
-### scCnT mESC-MEF - bulk_CnT_G4_NPC_mm10
-create_venn(
-  peak1 = "0_peaks.narrowPeak",
-  peak2 = "bulk_CnT_G4_NPC_mm10.bed",
-  type1 = "scCnT mESC-MEF",
-  type2 = "bulk CnT NPC",
-  filename = "cluster0_vs_NPC_CnT-Venn.pdf"
+col_fun = colorRamp2(c(0, 0.25, 0.5), c("#9ecae1", "white", "#fc9272"))
+Heatmap(
+  jaccards,
+  column_title = "",
+  row_title = "",
+  name = "Jaccard index",
+  # row_km = 2,
+  # column_km = 1,
+  clustering_method_rows = "complete",
+  col = col_fun,
+  rect_gp = gpar(col = "black", lwd = 0.1),
+  #top_annotation = ha,
+  show_column_dend = TRUE,
+  cluster_columns = TRUE,
+  cluster_rows = TRUE,
+  show_row_dend = TRUE,
+  heatmap_width = unit(8, "cm"),
+  heatmap_height = unit(8, "cm"),
+  row_names_gp = gpar(fontsize = 10),
+  column_names_gp = gpar(fontsize = 10),
+  column_names_rot = 90,
+  cell_fun = function(j, i, x, y, width, height, fill) {
+    grid.text(sprintf("%.2f", jaccards[i, j]), x, y, gp = gpar(fontsize = 10))}
 )
+dev.off()
 
-create_venn(
-  peak1 = "1_peaks.narrowPeak",
-  peak2 = "bulk_CnT_G4_NPC_mm10.bed",
-  type1 = "scCnT mESC-MEF",
-  type2 = "bulk CnT NPC",
-  filename = "cluster1_vs_NPC_CnT-Venn.pdf"
-)
-
-create_venn(
-  peak1 = "2_peaks.narrowPeak",
-  peak2 = "bulk_CnT_G4_NPC_mm10.bed",
-  type1 = "scCnT mESC-MEF",
-  type2 = "bulk CnT mESC",
-  filename = "cluster2_vs_NPC_CnT-Venn.pdf"
-)
-
-create_venn(
-  peak1 = "3_peaks.narrowPeak",
-  peak2 = "bulk_CnT_G4_NPC_mm10.bed",
-  type1 = "scCnT mESC-MEF",
-  type2 = "bulk CnT NPC",
-  filename = "cluster3_vs_NPC_CnT-Venn.pdf"
-)
-
-create_venn(
-  peak1 = "4_peaks.narrowPeak",
-  peak2 = "bulk_CnT_G4_NPC_mm10.bed",
-  type1 = "scCnT mESC-MEF",
-  type2 = "bulk CnT NPC",
-  filename = "cluster4_vs_NPC_CnT-Venn.pdf"
-)
-
-create_venn(
-  peak1 = "5_peaks.narrowPeak",
-  peak2 = "bulk_CnT_G4_NPC_mm10.bed",
-  type1 = "scCnT mESC-MEF",
-  type2 = "bulk CnT NPC",
-  filename = "cluster5_vs_NPC_CnT-Venn.pdf"
-)
-
-create_venn(
-  peak1 = "6_peaks.narrowPeak",
-  peak2 = "bulk_CnT_G4_NPC_mm10.bed",
-  type1 = "scCnT mESC-MEF",
-  type2 = "bulk CnT NPC",
-  filename = "cluster6_vs_NPC_CnT-Venn.pdf"
-)
-
-# overlap between mESC bulk CnT and mESC-MEF scCnT all peaks
-peak_folder = "../data/CellRanger/mES-mEF/"
-
-create_venn(
-  peak1 = "peaks_noheader.bed",
-  peak2 = "bulk_CnT_G4_mES_mm10.bed",
-  type1 = "scCnT mESC-MEF",
-  type2 = "bulk CnT mESC",
-  filename = "mESC-MEF_scCnT_vs_mESC_CnT-Venn.pdf"
-)
-
-create_venn(
-  peak1 = "peaks_noheader.bed",
-  peak2 = "bulk_CnT_G4_NPC_mm10.bed",
-  type1 = "scCnT mESC-MEF",
-  type2 = "bulk CnT NPC",
-  filename = "mESC-MEF_scCnT_vs_NPC_CnT-Venn.pdf"
-)
-
-### scCnT unsorted (brain cells) - bulk_CnT_G4_NPC_mm10
-peak_folder = "../results/Seurat/callpeaks_unsorted/peak_sets/"
-narrowpeaks = list.files(glue("{peak_folder}"), pattern = "*.narrowPeak")
-result_folder = "../results/GenomicRanges/unsorted_outputs/"
-
-create_venn(
-  peak1 = "0_peaks.narrowPeak",
-  peak2 = "bulk_CnT_G4_NPC_mm10.bed",
-  type1 = "scCnT unsorted",
-  type2 = "bulk CnT NPC",
-  filename = "cluster0_vs_NPC_CnT-Venn.pdf"
-)
-
-create_venn(
-  peak1 = "1_peaks.narrowPeak",
-  peak2 = "bulk_CnT_G4_NPC_mm10.bed",
-  type1 = "scCnT unsorted",
-  type2 = "bulk CnT NPC",
-  filename = "cluster1_vs_NPC_CnT-Venn.pdf"
-)
-
-create_venn(
-  peak1 = "2_peaks.narrowPeak",
-  peak2 = "bulk_CnT_G4_NPC_mm10.bed",
-  type1 = "scCnT unsorted",
-  type2 = "bulk CnT NPC",
-  filename = "cluster2_vs_NPC_CnT-Venn.pdf"
-)
-
-create_venn(
-  peak1 = "3_peaks.narrowPeak",
-  peak2 = "bulk_CnT_G4_NPC_mm10.bed",
-  type1 = "scCnT unsorted",
-  type2 = "bulk CnT NPC",
-  filename = "cluster3_vs_NPC_CnT-Venn.pdf"
-)
-
-create_venn(
-  peak1 = "4_peaks.narrowPeak",
-  peak2 = "bulk_CnT_G4_NPC_mm10.bed",
-  type1 = "scCnT unsorted",
-  type2 = "bulk CnT NPC",
-  filename = "cluster4_vs_NPC_CnT-Venn.pdf"
-)
-
-create_venn(
-  peak1 = "5_peaks.narrowPeak",
-  peak2 = "bulk_CnT_G4_NPC_mm10.bed",
-  type1 = "scCnT unsorted",
-  type2 = "bulk CnT NPC",
-  filename = "cluster5_vs_NPC_CnT-Venn.pdf"
-)
-
-create_venn(
-  peak1 = "6_peaks.narrowPeak",
-  peak2 = "bulk_CnT_G4_NPC_mm10.bed",
-  type1 = "scCnT unsorted",
-  type2 = "bulk CnT NPC",
-  filename = "cluster6_vs_NPC_CnT-Venn.pdf"
-)
-
-### scCnT unsorted (brain cells) - bulk_CnT_G4_mESC_mm10
-create_venn(
-  peak1 = "0_peaks.narrowPeak",
-  peak2 = "bulk_CnT_G4_mES_mm10.bed",
-  type1 = "scCnT unsorted",
-  type2 = "bulk CnT mESC",
-  filename = "cluster0_vs_mESC_CnT-Venn.pdf"
-)
-
-create_venn(
-  peak1 = "1_peaks.narrowPeak",
-  peak2 = "bulk_CnT_G4_mES_mm10.bed",
-  type1 = "scCnT unsorted",
-  type2 = "bulk CnT mESC",
-  filename = "cluster1_vs_mESC_CnT-Venn.pdf"
-)
-
-create_venn(
-  peak1 = "2_peaks.narrowPeak",
-  peak2 = "bulk_CnT_G4_mES_mm10.bed",
-  type1 = "scCnT unsorted",
-  type2 = "bulk CnT mESC",
-  filename = "cluster2_vs_mESC_CnT-Venn.pdf"
-)
-
-create_venn(
-  peak1 = "3_peaks.narrowPeak",
-  peak2 = "bulk_CnT_G4_mES_mm10.bed",
-  type1 = "scCnT unsorted",
-  type2 = "bulk CnT mESC",
-  filename = "cluster3_vs_mESC_CnT-Venn.pdf"
-)
-
-create_venn(
-  peak1 = "4_peaks.narrowPeak",
-  peak2 = "bulk_CnT_G4_mES_mm10.bed",
-  type1 = "scCnT unsorted",
-  type2 = "bulk CnT mESC",
-  filename = "cluster4_vs_mESC_CnT-Venn.pdf"
-)
-
-create_venn(
-  peak1 = "5_peaks.narrowPeak",
-  peak2 = "bulk_CnT_G4_mES_mm10.bed",
-  type1 = "scCnT unsorted",
-  type2 = "bulk CnT mESC",
-  filename = "cluster5_vs_mESC_CnT-Venn.pdf"
-)
-
-create_venn(
-  peak1 = "6_peaks.narrowPeak",
-  peak2 = "bulk_CnT_G4_mES_mm10.bed",
-  type1 = "scCnT unsorted",
-  type2 = "bulk CnT mESC",
-  filename = "cluster6_vs_mESC_CnT-Venn.pdf"
-)
 
 ### create bed files for bulk mESC and sc mESC-MEF
 mesc_mef = fread("../data/CellRanger/mES-mEF/peaks_noheader.bed")

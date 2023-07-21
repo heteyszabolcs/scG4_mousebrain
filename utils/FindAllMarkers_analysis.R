@@ -47,9 +47,14 @@ markers_lr_annot = mm10_annotation(regions = markers_lr, start_col = "start", en
 markers_lr = markers_lr %>% inner_join(., markers_lr_annot, by = "region") %>% 
   dplyr::select(region, gene_symbol, avg_log2FC, p_val, p_val_adj, cluster) %>% distinct_all()
 
+mean_fc_up = markers_lr %>% dplyr::filter(avg_log2FC > 0) %>% pull(avg_log2FC) %>% mean
+mean_fc_down = markers_lr %>% dplyr::filter(avg_log2FC < 0) %>% pull(avg_log2FC) %>% mean
+print(paste0("Mean up G4-quadruplexed fold change: ", as.character(round(mean_fc_up, 2))))
+print(paste0("Mean down G4-quadruplexed fold change: ", as.character(round(mean_fc_down, 2))))
+
 volc_input = markers_lr %>% 
-  group_by(gene_symbol) %>%
-  dplyr::filter(avg_log2FC == max(abs(avg_log2FC), na.rm=TRUE)) %>% 
+  # group_by(gene_symbol) %>%
+  # dplyr::filter(avg_log2FC == max(abs(avg_log2FC), na.rm=TRUE)) %>% 
   mutate(group = case_when(
   avg_log2FC > 0.1 & p_val_adj < 0.05 ~ "up",
   avg_log2FC < -0.1 & p_val_adj < 0.05 ~ "down",
@@ -82,7 +87,7 @@ ggplot_volc = volc_input %>%
   geom_vline(xintercept = c(-0.1, 0.1),
              linetype = "dashed") +
   #scale_fill_manual(values = cols) + # Modify point colour
-  scale_fill_manual(values = c("#bcbada", "#f07e70")) + # Modify point colour
+  scale_fill_manual(values = c("#bcbada", "#ffffb3", "#8dd3c7", "#80b1d3")) + # Modify point colour
   scale_size_manual(values = sizes) + # Modify point size
   scale_alpha_manual(values = alphas) + # Modify point transparency
   scale_x_continuous(breaks = c(seq(-4.5, 4.5, 1)),  	 
@@ -105,7 +110,7 @@ ggplot_volc = volc_input %>%
     axis.title.x = element_text(size = 20, color = "black"),
     axis.title.y = element_text(size = 20, color = "black")
   ) +
-  geom_text_repel(label = labels, size = 6, max.overlaps = 8) # add labels
+  geom_text_repel(label = labels, size = 6, max.overlaps = 12) # add labels
 ggplot_volc
 
 ggsave(
@@ -134,7 +139,10 @@ interesting_genes = interesting_genes[1:20]
 
 # creating inputs for visualization
 marques_lognorm = as.data.frame(marques_scrna[["RNA"]]@data)
-summary(rowMeans(marques_lognorm))
+#summary(rowMeans(marques_lognorm))
+
+# plot 1 as described in question
+ggplot(b, aes(x = population, y = value)) + geom_histogram(aes(fill = lambda), stat = "identity", position = "dodge") 
 
 valid = c()
 for(gene in interesting_genes) {
@@ -284,13 +292,23 @@ ggsave(
 )
 
 # logistic regression based differential analysis
-markers_lr_res0.1 = fread("../results/Seurat/callpeaks_unsorted/FindAllMarkers_logreg_output_res0.1.tsv")
+markers_lr_res0.1 = fread("../results/Seurat/final/unsorted_brain/res0.1/outputs/FindAllMarkers_logreg_output.tsv")
 markers_lr_res0.1 = markers_lr_res0.1 %>% mutate(region = paste(chr, start, end, sep = "-"))
 markers_lr_res0.1_annot = mm10_annotation(regions = markers_lr_res0.1, start_col = "start", end_col = "end", seqname_col = "chr") %>% 
-  dplyr::filter(abs(distanceToTSS) < 3000) %>% dplyr::select(seqnames, start, end, gene_symbol = SYMBOL) %>% 
+  dplyr::filter(abs(distanceToTSS) < 3000) %>% 
+  dplyr::select(seqnames, start, end, gene_symbol = SYMBOL) %>% 
   mutate(region = paste(seqnames, start, end, sep = "-"))
 markers_lr_res0.1 = markers_lr_res0.1 %>% inner_join(., markers_lr_res0.1_annot, by = "region") %>% 
   dplyr::select(region, gene_symbol, avg_log2FC, p_val, p_val_adj, cluster) %>% distinct_all()
+
+
+mean_fc_up = markers_lr_res0.1 %>% dplyr::filter(avg_log2FC > 0) %>% pull(avg_log2FC) %>% mean
+mean_fc_down = markers_lr_res0.1 %>% dplyr::filter(avg_log2FC < 0) %>% pull(avg_log2FC) %>% mean
+print(paste0("Mean up G4-quadruplexed fold change in res0.1 data: ", as.character(round(mean_fc_up, 2))))
+print(paste0("Mean down G4-quadruplexed fold change in res0.1 data: ", as.character(round(mean_fc_down, 2))))
+
+number_of_up = markers_lr_res0.1 %>% dplyr::filter(avg_log2FC > 0) %>% pull(gene_symbol) %>% unique %>% length
+print(paste0("Number of up G4-quadruplexed promoters in res0.1 data: ", as.character(round(number_of_up, 2))))
 
 volc_input_res0.1 = markers_lr_res0.1 %>% 
   group_by(gene_symbol) %>%
@@ -319,10 +337,10 @@ ggplot_volc_res0.1 = volc_input_res0.1 %>%
              alpha = group)) +
   geom_point(shape = 21, # Specify shape and colour as fixed local parameters    
              colour = "black") +
-  geom_hline(yintercept = -log10(0.05),
-             linetype = "dashed") +
-  geom_vline(xintercept = c(-0.1, 0.1),
-             linetype = "dashed") +
+  # geom_hline(yintercept = -log10(0.05),
+  #            linetype = "dashed") +
+  # geom_vline(xintercept = c(-0.1, 0.1),
+  #            linetype = "dashed") +
   #scale_fill_manual(values = cols) + # Modify point colour
   scale_fill_manual(values = c("#bcbcbc", "#b1d689")) + # Modify point colour
   scale_size_manual(values = sizes) + # Modify point size
@@ -336,6 +354,7 @@ ggplot_volc_res0.1 = volc_input_res0.1 %>%
     fill = " "
   ) +
   ylim(0, 30) +
+  xlim(0.8, 3) +
   guides(alpha = FALSE, size = FALSE, fill = guide_legend(override.aes = list(size = 5))) +
   theme_minimal() +
   theme(
@@ -351,7 +370,7 @@ ggplot_volc_res0.1 = volc_input_res0.1 %>%
 ggplot_volc_res0.1
 
 ggsave(
-  glue("{result_folder}FindAllMarkers_volc_logreg_res0.1.png"),
+  glue("{Relb}FindAllMarkers_volc_logreg_res0.1.png"),
   plot = last_plot(),
   width = 7,
   height = 5,

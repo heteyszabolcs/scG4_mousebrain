@@ -194,6 +194,10 @@ write_tsv(markers,glue("{workdir}/outputs/FindAllMarkers_logreg_output.tsv"))
 bed = markers %>% dplyr::select("chr", "start", "end")
 write_tsv(bed, glue("{workdir}/outputs/FindAllMarkers_logreg_output.bed"), col_names = FALSE)
 
+wilcoxon = FindAllMarkers(seurat, test.use = "wilcox") 
+wilcoxon = wilcoxon %>% dplyr::filter(p_val_adj < 0.05)
+write_tsv(wilcoxon, glue("{workdir}/outputs/FindAllMarkers_wilcoxon_output.tsv"))
+
 clusters = unique(meta$seurat_clusters)
 for(i in clusters) {
   length = meta %>% dplyr::filter(seurat_clusters == as.numeric(i)) %>% rownames %>% length
