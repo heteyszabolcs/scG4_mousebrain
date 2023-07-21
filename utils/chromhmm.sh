@@ -1,9 +1,9 @@
 #!/bin/bash -l
-#SBATCH -A snic2020-15-9
+#SBATCH -A naiss2023-22-84
 #SBATCH -p core
 #SBATCH -n 4
 #SBATCH -t 12:00:00
-#SBATCH -M snowy
+#SBATCH -M rackham
 #SBATCH -J wigglescout
 
 module load bioinfo-tools
