@@ -284,7 +284,7 @@ pred_boxplots = lapply(types, function(x) {
   plot = ggplot(meta,
                 aes(x = seurat_clusters, y = pred_score, fill = seurat_clusters)) +
     geom_boxplot(color = "black") +
-    scale_fill_brewer(palette = "Set3") +
+    scale_fill_brewer(palette = "Pastel1") +
     ylim(0, 1) +
     labs(
       title = x,
@@ -299,7 +299,7 @@ pred_boxplots = lapply(types, function(x) {
       plot.title = element_text(size = 15, face = "bold"),
       axis.text.x = element_text(size = 12, color = "black"),
       axis.text.y = element_text(size = 12, color = "black")
-    )
+    ) + stat_compare_means(label = "p.signif", label.y = 0.9)
   return(print(plot))
 })
 
@@ -1029,7 +1029,7 @@ vis_pred_boxplot = function(gene) {
   plot = ggplot(predictions,
                 aes(x = type, y = pred_score, fill = type)) +
     geom_boxplot(color = "black") +
-    scale_fill_brewer(palette = "Set3") +
+    scale_fill_brewer(palette = "Pastel1") +
     ylim(0, 1) +
     labs(
       title = "",
@@ -1046,7 +1046,7 @@ vis_pred_boxplot = function(gene) {
       axis.text.x = element_text(size = 12, color = "black"),
       axis.text.y = element_text(size = 12, color = "black"),
       axis.title = element_text(size = 20, color = "black")
-    )
+    ) + stat_compare_means(label = "p.signif", label.y = 0.9)
   
   return(print(plot))
 }
