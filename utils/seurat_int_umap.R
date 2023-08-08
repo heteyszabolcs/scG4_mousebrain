@@ -31,9 +31,9 @@ set.seed(5)
 result_folder = "../results/Seurat/callpeaks_GFPsorted/"
 
 # Seurat object (brain unsorted / brain GFP sorted)
-unsorted = readRDS(file = "../results/Seurat/callpeaks_unsorted/unsorted.Rds")
-unsorted_res0.1 = readRDS(file = "../results/Seurat/callpeaks_unsorted/unsorted_res0.1.Rds")
-sorted = readRDS(file = "../results/Seurat/callpeaks_GFPsorted/GFPsorted.Rds")
+unsorted = readRDS(file = "../results/Seurat/final/unsorted_brain/res0.8/outputs/Seurat_object.Rds")
+unsorted_res0.1 = readRDS(file = "../results/Seurat/final/unsorted_brain/res0.1/outputs/Seurat_object.Rds")
+sorted = readRDS(file = "../results/Seurat/final/sorted_brain/res0.8/outputs/Seurat_object.Rds")
 
 # Marques et al. oligo scRNA data
 rna = read.table(
@@ -119,7 +119,7 @@ rna@active.ident = factor(rna$merged_cell_class, levels = unique(rna$merged_cell
 saveRDS(rna, glue("../results/Seurat/scRNASeq_GSE75330.rds"))
 
 markers = FindAllMarkers(rna)
-markers = read_tsv("../results/Seurat/scRNA-Seq_Marques_et_al-FindAllMarkers_output.tsv")
+markers = read_tsv("../results/Seurat/final/sorted_brain/res0.8/integration/outputs/scRNA-Seq_Marques_et_al-FindAllMarkers_output.tsv")
 markers.pos = markers[markers$p_val < 0.05 &
                         markers$avg_log2FC > 0.5,]
 
@@ -547,7 +547,7 @@ most_var_cluster2 = markers %>% dplyr::filter(gene %in% most_var_cluster2) %>%
 bars = ggplot(data = most_var_cluster2, aes(y = cluster_n, x = reorder(cluster_aggr, -cluster_n))) +
   geom_bar(stat = "identity", fill = "steelblue", color = "black") +
   theme_minimal() +
-  labs(title = "GFP+ Seurat cluster 2",
+  labs(title = "type of pos. expression markers in cluster 2",
        x = " ",
        y = "# of positive expr. marker") +
   theme(

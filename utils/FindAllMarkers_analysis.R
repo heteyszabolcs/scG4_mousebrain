@@ -28,6 +28,7 @@ marques_marker_genes = fread(marker_genes, header = FALSE)
 scrna = "../results/Seurat/scRNASeq_GSM4979874-75.rds"
 marques_scrna = "../results/Seurat/scRNASeq_GSE75330.rds"
 
+
 # G4 scCut&Tag marker regions
 # Wilcoxon rank sum based differential analysis
 markers = fread("../results/Seurat/final/unsorted_brain/res0.8/outputs/FindAllMarkers_logreg_output.tsv")
@@ -394,3 +395,36 @@ markers_lr_annot = mm10_annotation(regions = markers_lr, start_col = "start", en
   mutate(region = paste(seqnames, start, end, sep = "-"))
 markers_lr = markers_lr %>% inner_join(., markers_lr_annot, by = "region") %>% 
   dplyr::select(region, gene_symbol, avg_log2FC, p_val, p_val_adj, cluster) %>% distinct_all()
+
+# testing cluster uniqueness by FindMarkers 
+seurat = readRDS("../results/Seurat/final/unsorted_brain/res0.8/outputs/Seurat_object.Rds")
+
+# in case of resolution 0.8
+clusters = c(0, 1, 2, 3, 4)
+for(i in clusters) {
+  for (j in clusters) {
+    if (i == j) {
+      next
+    }
+    out = FindMarkers(seurat,
+                      ident.1 = i,
+                      ident.2 = j,
+                      verbose = FALSE)
+    sign = out %>% dplyr::filter(p_val_adj < 0.05) %>% dplyr::filter(abs(avg_log2FC) > 0.1) %>%
+      nrow
+    if (sign == 0) {
+      sign = 0
+    }
+    print(
+      paste0(
+        as.character(i),
+        " vs ",
+        as.character(j) ,
+        " - ",
+        " number of marker regions: ",
+        as.character(sign)
+      )
+    )
+  }
+}
+
