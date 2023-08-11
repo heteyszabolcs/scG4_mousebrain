@@ -703,6 +703,7 @@ oxr1 = CoveragePlot(
   region = "Oxr1",
   annotation = TRUE,
   show.bulk = TRUE,
+  ymax = 5,
   group.by = "MOL_status",
   peaks = TRUE
 ) + scale_fill_brewer(type = "seq", palette = "Set3") 
@@ -756,5 +757,14 @@ cspg5 = CoveragePlot(
   region = "Cspg5",
   annotation = TRUE,
   group.by = "seurat_clusters",
+  peaks = TRUE
+) + scale_fill_brewer(type = "seq", palette = "Set3")
+
+zfp407 = CoveragePlot(
+  object = sorted,
+  region = "Zfp407",
+  annotation = TRUE,
+  show.bulk = TRUE,
+  group.by = "MOL_status",
   peaks = TRUE
 ) + scale_fill_brewer(type = "seq", palette = "Set3")

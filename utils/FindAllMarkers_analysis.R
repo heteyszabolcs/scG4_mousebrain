@@ -136,17 +136,14 @@ scrna = readRDS(scrna)
 marques_scrna = readRDS(marques_scrna)
 
 interesting_genes = volc_input %>% arrange(desc(abs(avg_log2FC))) %>% pull(gene_symbol)
-interesting_genes = interesting_genes[1:20]
+interesting_genes = interesting_genes[1:30]
 
 # creating inputs for visualization
 marques_lognorm = as.data.frame(marques_scrna[["RNA"]]@data)
 #summary(rowMeans(marques_lognorm))
 
-# plot 1 as described in question
-ggplot(b, aes(x = population, y = value)) + geom_histogram(aes(fill = lambda), stat = "identity", position = "dodge") 
-
 valid = c()
-for(gene in interesting_genes) {
+for(gene in unique(interesting_genes)) {
   if(gene %in% rownames(marques_lognorm)) {
     valid = c(valid, gene)
   }
@@ -272,7 +269,7 @@ jitter = ggplot(bp_input, aes(x = order, y = log2_norm_expr)) +
       hjust = 1
     ),
     axis.text.y = element_text(size = 12, color = "black")
-  ) + stat_compare_means(aes(group = source), label = "p.signif")
+  ) + stat_compare_means(aes(group = source), label = "p.format")
 jitter = rasterize(jitter, layers='Point', dpi=300)
 
 ggsave(
