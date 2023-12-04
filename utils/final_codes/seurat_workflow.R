@@ -66,6 +66,17 @@ seurat = CreateSeuratObject(counts = chrom_assay,
                                assay = "peaks",
                                meta.data = metadata)
 
+# normalization
+seurat = RunTFIDF(seurat)
+seurat = FindTopFeatures(seurat, min.cutoff = 'q0')
+seurat = RunSVD(seurat)
+depthcor = DepthCor(seurat) # 1st component highly correlate with sequencing depth
+
+# Non-linear dimension reduction and clustering
+seurat = RunUMAP(object = seurat,
+                 reduction = 'lsi',
+                 dims = 2:30)
+
 # find doublets using DoubletFinder
 doublet_test = Seurat::Read10X_h5(filename = glue("{cell_ranger}/filtered_peak_bc_matrix.h5"), use.names = T)
 doublet_test = CreateSeuratObject(doublet_test, project = "G4 scC&T")
@@ -90,16 +101,7 @@ annotations = GetGRangesFromEnsDb(ensdb = EnsDb.Mmusculus.v79)
 seqlevelsStyle(annotations) = 'UCSC'
 Annotation(seurat) = annotations
 
-# normalization
-seurat = RunTFIDF(seurat)
-seurat = FindTopFeatures(seurat, min.cutoff = 'q0')
-seurat = RunSVD(seurat)
-depthcor = DepthCor(seurat) # 1st component highly correlate with sequencing depth
-
-# Non-linear dimension reduction and clustering
-seurat = RunUMAP(object = seurat,
-                    reduction = 'lsi',
-                    dims = 2:30)
+# clustering (community detection)
 seurat = FindNeighbors(object = seurat,
                           reduction = 'lsi',
                           dims = 2:30)
@@ -107,6 +109,13 @@ seurat = FindClusters(object = seurat,
                          verbose = FALSE,
                          resolution = res,
                          algorithm = 3)
+
+# removing cluster 5 - cluster 5 contains only 26 cells and in downstream steps showed some bias
+if(res == 0.8) {
+  seurat = subset(x = seurat, idents = 5, invert = TRUE)
+  seurat = subset(x = seurat, idents = 6, invert = TRUE)
+}
+
 
 # QC violin plots (without correction)
 nF_violin = VlnPlot(seurat, group.by = "seurat_clusters", features = "nFeature_peaks", pt.size = 0.1) +

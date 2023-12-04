@@ -286,6 +286,23 @@ grouped_jitter1 = ggplot(plot_input, aes(x = order, y = G4, color = k27ac_source
 grouped_jitter1
 grouped_jitter1 = rasterize(grouped_jitter1, layers='Point', dpi=300)
 
+ggsave(
+  glue("{result_folder}CM_enhancers-G4s_over_high_K27ac.png"),
+  plot = grouped_jitter1,
+  width = 8,
+  height = 5,
+  dpi = 300,
+)
+
+ggsave(
+  glue("{result_folder}CM_enhancers-G4s_over_high_K27ac.pdf"),
+  plot = grouped_jitter1,
+  device = "pdf",
+  width = 8,
+  height = 5,
+  dpi = 300,
+)
+
 # make boxplot facet at level of clusters
 # comparison table for pairwise statistics
 comparisons = list(c("Martier et al.", "Creyghton et al."), 
@@ -321,22 +338,6 @@ facet = ggplot(plot_input_cut, aes(x = order, y = G4, color = k27ac_source)) +
 facet
 facet = rasterize(facet, layers='Point', dpi=300)
 
-ggsave(
-  glue("{result_folder}CM_enhancers-G4s_over_high_K27ac.png"),
-  plot = grouped_jitter1,
-  width = 8,
-  height = 5,
-  dpi = 300,
-)
-
-ggsave(
-  glue("{result_folder}CM_enhancers-G4s_over_high_K27ac.pdf"),
-  plot = grouped_jitter1,
-  device = "pdf",
-  width = 8,
-  height = 5,
-  dpi = 300,
-)
 
 ggsave(
   glue("{result_folder}CM_enhancers-G4s_over_high_K27ac-facet.png"),
@@ -476,6 +477,15 @@ for (cluster in names(g4s_no_ol)) {
   g4_k27ac_cm_enh_quant = c(g4_k27ac_cm_enh_quant, length(ol))
 }
 
+# query: g4_peaks
+# subject: Li et al. cCREs with Marek K27ac signal
+g4_k27ac_li_enh_quant = numeric()
+for (cluster in names(g4s_no_ol)) {
+  ol = suppressWarnings(findOverlaps(g4_peaks[[cluster]], k27ac_li_enh, type = "any", minoverlap = 1))
+  g4_k27ac_li_enh_quant = c(g4_k27ac_li_enh_quant, length(ol))
+}
+
+
 get_signals_over_k27ac_enh = function(selected_cluster = "4") {
   require("wigglescout")
   cl_cm_ol = suppressWarnings(subsetByOverlaps(g4_peaks[[selected_cluster]], k27ac_enh, type = "any", minoverlap = 1))
@@ -566,56 +576,64 @@ cl_2_spec_CCAN = get_signals_over_CCAN_enh(selected_cluster = "2")
 cl_3_spec_CCAN = get_signals_over_CCAN_enh(selected_cluster = "3")
 cl_4_spec_CCAN = get_signals_over_CCAN_enh(selected_cluster = "4")
 
+
 clusters = c("0", "1", "2", "3", "4")
-cm_bar = tibble(
+bar_cm = tibble(
   overlap = g4_k27ac_cm_enh_quant,
   peak_count = sapply(clusters, function(x) length(g4_peaks[[which(names(g4_peaks) == x)]])),
   enhancer_ratio = (overlap / peak_count) * 100,
   cluster = names(g4s_no_ol),
-  fill_col = names(g4s_no_ol)
-) %>%
-  ggplot(data = ., aes(
-    x = reorder(cluster,-enhancer_ratio),
+  fill_col = names(g4s_no_ol),
+  dataset = "Cruz-Molina et al. + H3K27ac",
+) 
+bar_li = tibble(
+  overlap = g4_k27ac_li_enh_quant,
+  peak_count = sapply(clusters, function(x) length(g4_peaks[[which(names(g4_peaks) == x)]])),
+  enhancer_ratio = (overlap / peak_count) * 100,
+  cluster = names(g4s_no_ol),
+  fill_col = names(g4s_no_ol),
+  dataset = "Li et al. + H3K27ac",
+) %>% arrange(desc(enhancer_ratio)) 
+
+bar_input = rbind(bar_li, bar_cm)
+
+order = factor(bar_input$cluster, levels = as.character(bar_li$cluster))
+
+bars = bar_input %>% ggplot(data = ., aes(
+    x = order,
     y = enhancer_ratio,
-    fill = fill_col
+    fill = dataset
   )) +
   geom_bar(stat = "identity",
+           position=position_dodge(),
            width = 0.5,
            color = "black") +
-  scale_fill_brewer(palette = "Set3") +
-  scale_y_continuous(limits = c(0, 3), breaks = seq(0, 5, 1)) +
+  scale_fill_manual(values=c("#bdbdbd", "#fec44f")) +
+  scale_y_continuous(limits = c(0, 75), breaks = seq(0, 100, 25)) +
   labs(
-    title = expression(paste(
-      "G4 overlaps with active enhancers of ",
-      italic("Cruz-Molina et al.")
-    )),
+    title = "Overlaps with H3K27ac-ed regulatory elements",
     x = "Seurat cluster",
     y = "active enhancer %",
-    fill = "Seurat cluster"
+    fill = ""
   ) +
   theme_classic() +
   theme(
     text = element_text(size = 20),
-    plot.title = element_text(size = 15),
-    axis.text.x = element_text(size = 13, color = "black"),
-    axis.text.y = element_text(size = 13, color = "black")
-  )
-cm_bar
+    plot.title = element_text(size = 16),
+    axis.text.x = element_text(size = 17, color = "black"),
+    axis.text.y = element_text(size = 17, color = "black")
+  ) + theme(legend.position="bottom")
+bars
 
-cm_bar_input = tibble(
-  overlap = g4_k27ac_cm_enh_quant,
-  peak_count = sapply(clusters, function(x) length(g4_peaks[[which(names(g4_peaks) == x)]])),
-  enhancer_ratio = (overlap / peak_count) * 100,
-  cluster = names(g4s_no_ol),
-  fill_col = names(g4s_no_ol)
-)
+print(glue("mESC Cruz-Molina set - Average enhancer percentage across clusters: {round(mean(bar_cm$enhancer_ratio), 2)} % (SD: {round(sd(bar_cm$enhancer_ratio), 2)})"))
+print(glue("mESC Cruz-Molina set - Average peak number over active enhancer: {round(mean(bar_cm$overlap), 0)} (SD: {round(sd(bar_cm$overlap), 0)})"))
 
-print(glue("Average enhancer percentage across clusters: {round(mean(cm_bar_input$enhancer_ratio), 2)} % (SD: {round(sd(cm_bar_input$enhancer_ratio), 2)})"))
-print(glue("Average peak number over active enhancer: {round(mean(cm_bar_input$overlap), 0)} (SD: {round(sd(cm_bar_input$overlap), 0)})"))
+print(glue("Li cCRE set - Average cCRE percentage across clusters: {round(mean(bar_li$enhancer_ratio), 2)} % (SD: {round(sd(bar_li$enhancer_ratio), 2)})"))
+print(glue("Li cCRE set - Average peak number over cCREs: {round(mean(bar_li$overlap), 0)} (SD: {round(sd(bar_li$overlap), 0)})"))
 
 ggsave(
-  glue("{result_folder}G4_overlaps_w_CruzM_active_enh.pdf"),
-  plot = cm_bar,
+  glue("{result_folder}G4_overlaps_w_K27ed_regulatory_elements.pdf"),
+  plot = bars,
   width = 10,
   height = 7,
   device = "pdf"

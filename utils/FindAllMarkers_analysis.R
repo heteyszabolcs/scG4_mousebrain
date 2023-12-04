@@ -88,7 +88,7 @@ ggplot_volc = volc_input %>%
   geom_vline(xintercept = c(-0.1, 0.1),
              linetype = "dashed") +
   #scale_fill_manual(values = cols) + # Modify point colour
-  scale_fill_manual(values = c("#bcbada", "#ffffb3", "#8dd3c7", "#80b1d3")) + # Modify point colour
+  scale_fill_manual(values = c("#8dd3c7", "#ffffb3", "#bcbada", "#80b1d3")) + # Modify point colour
   scale_size_manual(values = sizes) + # Modify point size
   scale_alpha_manual(values = alphas) + # Modify point transparency
   scale_x_continuous(breaks = c(seq(-4.5, 4.5, 1)),  	 
@@ -368,7 +368,7 @@ ggplot_volc_res0.1 = volc_input_res0.1 %>%
 ggplot_volc_res0.1
 
 ggsave(
-  glue("{Relb}FindAllMarkers_volc_logreg_res0.1.png"),
+  glue("{result_folder}FindAllMarkers_volc_logreg_res0.1.png"),
   plot = last_plot(),
   width = 7,
   height = 5,
@@ -424,4 +424,142 @@ for(i in clusters) {
     )
   }
 }
+
+
+# marker analysis at the level of enhancers (Li et al., cCREs, Cruz-Molina mESC enhancers)
+library("GenomicRanges")
+# enhancers Cruz-Molina Li et al
+cm_enh = fread("../data/bed/ESC_Enhancer_CruzMolina.active_mm10.bed")
+cm_enh$V6 = "Cruz-Molina_active_enh"
+cm_enh = GRanges(
+  seqnames = cm_enh$V1,
+  ranges = IRanges(
+    start = cm_enh$V2,
+    end = cm_enh$V3,
+    names = cm_enh$V6
+  )
+)
+
+# putative regulatory elements Li et al.
+li_enh = fread("../data/bed/Li_et_al-mousebrain.union.cCRE.bed")
+li_enh$V5 = "Li_enh"
+li_enh = GRanges(
+  seqnames = li_enh$V1,
+  ranges = IRanges(
+    start = li_enh$V2,
+    end = li_enh$V3,
+    names = li_enh$V5
+  )
+)
+
+# differential G4 peak analysis
+output = FindAllMarkers(seurat, assay = "peaks", verbose = FALSE, test.use = "LR")
+peaks = output %>% separate(gene, sep = "-", into = c("chr", "start", "end")) %>% 
+  dplyr::select(chr, start, end) %>% 
+  mutate(end = as.numeric(end), start = as.numeric(start))  
+
+peaks = GRanges(
+  seqnames = peaks$chr,
+  ranges = IRanges(
+    start = peaks$start,
+    end = peaks$end
+  )
+)
+
+ol_li = findOverlaps(peaks, li_enh, type = "any", ignore.strand = FALSE)
+peaks_li = as_tibble(peaks[queryHits(ol_li)])
+peaks_li = peaks_li %>% mutate(region = paste(seqnames, start, end, sep = "-")) %>% 
+  dplyr::select(region)
+
+enh_volc_input = output %>% 
+  mutate(group = case_when(
+    avg_log2FC > 0.1 & p_val_adj < 0.05 ~ "up",
+    avg_log2FC < -0.1 & p_val_adj < 0.05 ~ "down",
+    avg_log2FC >= -0.1 & avg_log2FC <= 0.1 ~ "unaltered",
+    TRUE ~ "non sign.")
+  )
+enh_volc_input = enh_volc_input %>% mutate(sign_label = case_when(
+  avg_log2FC > 0.5 & p_val_adj < 0.005 ~ gene,
+  avg_log2FC < -0.5& p_val_adj < 0.005 ~ gene,
+  avg_log2FC >= -0.5 & avg_log2FC <= 0.5 ~ "",
+  TRUE ~ "non sign."
+))
+enh_volc_input = enh_volc_input %>% mutate(overlap = case_when(
+  gene %in% peaks_li$region ~ "cCRE (Li et al.)",
+  TRUE ~ ""
+))
+
+labels = enh_volc_input %>% pull(sign_label)
+
+ggplot_volc_enh = enh_volc_input %>%
+  ggplot(aes(x = avg_log2FC,
+             y = -log10(p_val_adj),
+             size = group,
+             alpha = group,
+             fill = as.character(cluster),
+             shape = overlap)) +
+  geom_point() +
+  geom_hline(yintercept = -log10(0.05),
+             linetype = "dashed") +
+  geom_vline(xintercept = c(-0.1, 0.1),
+             linetype = "dashed") +
+  scale_fill_brewer(palette = "Set3", aesthetics = "fill") + # Modify point colour
+  scale_size_manual(values = sizes) + # Modify point size
+  scale_shape_manual(values = c(21, 24)) +
+  scale_alpha_manual(values = alphas) + # Modify point transparency
+  scale_x_continuous(breaks = c(seq(-3, 3, 1)),  	 
+                     limits = c(-3, 3)) +
+  labs(
+    title = "Differential G-quadruplexed regions",
+    x = "log2FoldChange",
+    y = "-log10 adj.p-value",
+    fill = "cluster",
+    shape = ""
+  ) +
+  ylim(0, 30) +
+  guides(alpha = FALSE, size = FALSE, fill = guide_legend(override.aes = list(size = 5))) +
+  theme_minimal() +
+  theme(
+    text = element_text(size = 16),
+    legend.text = element_text(size = 14),
+    plot.title = element_text(size = 16, face = "bold"),
+    axis.text.x = element_text(size = 14, color = "black"),
+    axis.text.y = element_text(size = 14, color = "black"),
+    axis.title.x = element_text(size = 20, color = "black"),
+    axis.title.y = element_text(size = 20, color = "black")
+  )
+  #geom_text_repel(label = labels, size = 6, max.overlaps = 8) # add labels
+ggplot_volc_enh
+
+ggsave(
+  glue("{result_folder}FindAllMarkers_peaks_Li_et_al.png"),
+  plot = last_plot(),
+  width = 7,
+  height = 5,
+  dpi = 300,
+)
+
+ggsave(
+  glue("{result_folder}FindAllMarkers_peaks_Li_et_al.pdf"),
+  device = "pdf",
+  plot = last_plot(),
+  width = 7,
+  height = 5,
+  dpi = 300,
+)
+
+filt = enh_volc_input %>% 
+  dplyr::filter(overlap == "cCRE (Li et al.)") %>% 
+  dplyr::filter(group == "up") %>% 
+  group_by(cluster) %>% count
+
+
+
+
+
+
+
+
+
+
 
