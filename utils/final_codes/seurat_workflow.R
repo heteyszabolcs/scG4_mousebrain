@@ -31,7 +31,7 @@ parser$add_argument("-r", "--res", type = "numeric",
 
 args = parser$parse_args()
 
-# add path to Cell Ranger output
+# add path to Cell Ranger output folder
 cell_ranger = args$cell_ranger_output
 # add working directory
 workdir = args$workdir
