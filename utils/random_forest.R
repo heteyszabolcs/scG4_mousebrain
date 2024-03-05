@@ -32,6 +32,10 @@ pred_score = t(pred_score@data)
 ids = rownames(pred_score)
 pred_score = as_tibble(pred_score)
 
+# predictions of scBridge integration
+pred_bridge = fread("../results/scBridge/output/scbridge_predictions.csv", header = TRUE)
+mol_ids_bridge = pred_bridge %>% filter(Prediction == "MOL") %>% pull(V1)
+
 # highly predicted MOL cells
 pred_score_mol = pred_score %>% 
   dplyr::select(-max) %>% 
@@ -64,11 +68,12 @@ opc_markers = markers %>%
   top_n(100, wt = avg_log2FC) # top 100 marker
 opc_markers = unique(opc_markers$gene)[1:20]
 
-## random forest (tidymodels with randomForest)
+## random forest (tidymodels with randomForest), xgboost, logreg
 # gene activity scores (G4) of set of genes
 # target: MOL type or non-MOL type
 random_forest_mol = function(predictors,
-                             curve_filename) {
+                             curve_filename,
+                             mol_ids) {
   set.seed(42)
   
   g4 = readRDS(file = glue("{seurat_folder}Seurat_object.Rds"))
@@ -188,7 +193,8 @@ random_forest_mol = function(predictors,
   
 }
 
-xgb_mol = function(predictors) {
+# extreme gradient boosting
+xgb_mol = function(predictors, mol_ids) {
   
   set.seed(42)
   
@@ -275,9 +281,93 @@ xgb_mol = function(predictors) {
 
 }
 
+# logistic regression 
+logreg_mol = function(predictors,
+                      curve_filename,
+                      mol_ids) {
+  set.seed(42)
+  
+  g4 = readRDS(file = glue("{seurat_folder}Seurat_object.Rds"))
+  g4_counts = as.matrix(g4@assays$GA@data)
+  
+  # GA scores of highly predicted MOL cells
+  g4_counts = t(g4_counts)
+  ids = rownames(g4_counts)
+  g4_counts = as_tibble(g4_counts)
+  g4_counts = g4_counts %>%
+    mutate(cell_id = ids) %>%
+    mutate(cell_type = ifelse(cell_id %in% mol_ids, "MOL", "non-MOL")) %>%
+    dplyr::select(cell_type, everything())
+  
+  g4_counts = g4_counts[, c("cell_type", intersect(predictors, colnames(g4_counts)))]
+  
+  split = initial_split(g4_counts, strata = cell_type, prop = 0.6)
+  
+  # Create training data
+  train = split %>% training() %>% mutate(cell_type = as.factor(cell_type))
+  # Create testing data
+  test = split %>% testing() %>% mutate(cell_type = as.factor(cell_type))
+  
+  logreg = logistic_reg() %>%
+    # Set the engine
+    set_engine("glm") %>%
+    # Set the mode
+    set_mode("classification") %>%
+    # Fit the model
+    fit(cell_type ~ ., data = train)
+  
+  tidy(logreg, exponentiate = TRUE)  %>%
+    filter(p.value < 0.05)
+  
+  # prediction on test
+  pred_class = predict(logreg,
+                       new_data = test,
+                       type = "class")
+  pred_proba = predict(logreg,
+                       new_data = test,
+                       type = "prob")
+  results = test %>%
+    select(cell_type) %>%
+    bind_cols(pred_class, pred_proba)
+  
+  # model evaluation
+  print(conf_mat(results, truth = cell_type,
+                 estimate = .pred_class))
+  print(accuracy(results, truth = cell_type,
+                 estimate = .pred_class))
+  print(sens(results, truth = cell_type,
+             estimate = .pred_class))
+  print(spec(results, truth = cell_type,
+             estimate = .pred_class))
+  print(precision(results, truth = cell_type,
+                  estimate = .pred_class))
+  print(f_meas(results, truth = cell_type,
+               estimate = .pred_class))
+  print(mcc(results, truth = cell_type,
+            estimate = .pred_class))
+  all_metrics = metric_set(accuracy, sens, spec, precision, recall, f_meas, kap, mcc)
+  all_metrics = all_metrics(results,
+                            truth = cell_type,
+                            estimate = .pred_class)
+  
+  print(roc_auc(results,
+                truth = cell_type,
+                ".pred_MOL"))
+  
+  results %>%
+    roc_curve(truth = cell_type, ".pred_MOL") %>%
+    autoplot + ggtitle("")
+  
+  return(all_metrics)
+}
+  
 # run on MOL markers
-mol_roc = random_forest_mol(curve_filename = "highly_pred_MOLs", predictors = mol_markers)
-mol_xgb = xgb_mol(predictors = mol_markers) 
+mol_roc = random_forest_mol(curve_filename = "scBridge_MOLs", 
+                            predictors = mol_markers, 
+                            mol_ids = mol_ids_bridge)
+mol_xgb = xgb_mol(predictors = mol_markers, mol_ids = mol_ids_bridge) 
+
+mol_logreg = logreg_mol(predictors = mol_markers, mol_ids = mol_ids_bridge) 
 
 # run on OPC markers
 opc_roc = random_forest_mol(curve_filename = "highly_pred_MOLs-OPC_markers-", predictors = opc_markers)

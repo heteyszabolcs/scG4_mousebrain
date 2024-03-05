@@ -1,16 +1,25 @@
-suppressPackageStartupMessages(library("RColorBrewer"))
-suppressPackageStartupMessages(library("viridis"))
-suppressPackageStartupMessages(library("ggplot2"))
-suppressPackageStartupMessages(library("data.table"))
-suppressPackageStartupMessages(library("reshape2"))
-suppressPackageStartupMessages(library("plyr"))
-suppressPackageStartupMessages(library("ComplexHeatmap"))
-suppressPackageStartupMessages(library("circlize"))
+if (!require("pacman"))
+  install.packages("pacman")
+pacman::p_load("data.table",
+               "tidyverse",
+               "reshape2",
+               "plyr",
+               "ComplexHeatmap",
+               "ggplot2",
+               "viridis",
+               "RColorBrewer",
+               "circlize"
+)
 
 
+# Seurat object
+# scG4 - scRNA integrated
 seurat = readRDS("../results/Seurat/final/sorted_brain/res0.8/integration/outputs/G4_Marques_scRNA_integration.Rds")
-
 meta = seurat@meta.data
+
+# scBridge outputs
+rel = fread("../results/scBridge/output/scbridge_reliability.csv")
+pred = fread("../results/scBridge/output/scbridge_predictions.csv", header = TRUE)
 
 # t1: table with 2 columns: coembed labels, raw labels
 # t2: table with 2 columns: coembed labels, raw labels
@@ -43,6 +52,7 @@ cal_ovlpScore <- function(t1, t2){
 }
 
 # calculate overlap
+# Seurat integration
 ident2rna = data.frame(idents = rownames(meta), rna_label = meta$pred_cell_type)
 ident2rna = ident2rna[complete.cases(ident2rna), ]
 
@@ -63,7 +73,7 @@ rownames(mapSubclass) = rows
 col_fun = colorRamp2(c(0, 0.25, 0.5), c("#452258", "#679b81", "#f0e527"))
 
 pdf(
-   file = "../results/Seurat/overlap_score_hm.pdf",
+   file = "../results/Seurat/Seurat_overlap_score_hm.pdf",
    width = 5,
    height = 4
  )
@@ -73,7 +83,7 @@ hm = Heatmap(
   clustering_distance_rows = "pearson",
   col = col_fun,
   row_title = "",
-  column_title = "",
+  column_title = "Seurat",
   show_row_names = TRUE,
   rect_gp = gpar(col = "black", lwd = 1),
   cluster_columns = TRUE,
@@ -85,5 +95,53 @@ hm = Heatmap(
 hm
 dev.off()
 
+# scBridge integration
+meta = seurat@meta.data %>% mutate(cell_id = rownames(seurat@meta.data)) %>% 
+  left_join(., rel, c("cell_id" = "V1")) %>% rename(scBridge_reliability = "Reliability") %>% 
+  left_join(., pred, c("cell_id" = "V1")) %>% rename(scBridge_prediction = "Prediction") %>% 
+  filter(scBridge_reliability > 0.9)
+
+ident2rna = data.frame(idents = rownames(meta), rna_label = meta$scBridge_prediction)
+ident2rna = ident2rna[complete.cases(ident2rna), ]
+ident2rna = ident2rna[which(ident2rna$rna_label != "Novel (Most Unreliable)"), ]
+
+ident2g4 = data.frame(idents = rownames(meta), rna_label = meta$seurat_clusters)
+ident2g4 = ident2g4[complete.cases(ident2g4), ]
+
+ovlpScore.df = cal_ovlpScore(ident2rna, ident2g4)
+
+mapSubclass = ovlpScore.df
+colnames(mapSubclass) <- c("cell_type", "seurat_cluster", "ovlpScore")
+mapSubclass = dcast(mapSubclass, cell_type~seurat_cluster, value.var = "ovlpScore", 
+                    fun.aggregate = identity, fill = 0)
+rows = mapSubclass$cell_type
+mapSubclass = mapSubclass[,-1]
+rownames(mapSubclass) = rows
 
 
+col_fun = colorRamp2(c(0, 0.25, 0.5), c("#452258", "#679b81", "#f0e527"))
+
+pdf(
+  file = "../results/Seurat/scBridge_overlap_score_hm.pdf",
+  width = 5,
+  height = 4
+)
+hm2 = Heatmap(
+  mapSubclass,
+  name = "overlap score",
+  clustering_distance_rows = "pearson",
+  col = col_fun,
+  row_title = "",
+  column_title = "scBridge",
+  show_row_names = TRUE,
+  rect_gp = gpar(col = "black", lwd = 1),
+  cluster_columns = TRUE,
+  cluster_rows = TRUE,
+  width = unit(7, "cm"),
+  height = unit(7, "cm"),
+  column_names_rot = 0
+)
+hm2
+dev.off()
+
+hm + hm2
