@@ -43,6 +43,10 @@ pred_score_mol = pred_score %>%
   dplyr::filter(MOL > 0.75)
 mol_ids = pred_score_mol %>% pull(cell_id)
 
+length(mol_ids_bridge)
+length(mol_ids)
+length(intersect(mol_ids_bridge, mol_ids))
+
 # highly predicted OPC cells
 pred_score_opc = pred_score %>% 
   dplyr::select(-max) %>% 
@@ -56,7 +60,7 @@ mol_markers = markers %>%
   mutate(cluster = ifelse(str_detect(markers$cluster, "NFOL"), "NFOL", cluster)) %>% 
   dplyr::filter(str_detect(cluster, "MOL")) %>% 
   arrange(desc(avg_log2FC)) %>% 
-  top_n(100, wt = avg_log2FC) # top 100 marker
+  top_n(200, wt = avg_log2FC) # top 200 marker
 all_mol_markers = mol_markers$gene
 mol_markers = unique(mol_markers$gene)[1:20]
 
@@ -65,7 +69,8 @@ opc_markers = markers %>%
   mutate(cluster = ifelse(str_detect(markers$cluster, "NFOL"), "NFOL", cluster)) %>% 
   dplyr::filter(str_detect(cluster, "OPC")) %>% 
   arrange(desc(avg_log2FC)) %>% 
-  top_n(100, wt = avg_log2FC) # top 100 marker
+  top_n(200, wt = avg_log2FC) # top 100 marker
+all_opc_markers = opc_markers$gene
 opc_markers = unique(opc_markers$gene)[1:20]
 
 ## random forest (tidymodels with randomForest), xgboost, logreg
@@ -354,9 +359,18 @@ logreg_mol = function(predictors,
                 truth = cell_type,
                 ".pred_MOL"))
   
-  results %>%
+  
+  roc = results %>%
     roc_curve(truth = cell_type, ".pred_MOL") %>%
     autoplot + ggtitle("")
+  
+  ggsave(
+    glue("{result_folder}{curve_filename}-logreg_ROC_curve-MOL.pdf"),
+    plot = roc,
+    width = 6,
+    height = 3,
+    device = "pdf"
+  )
   
   return(all_metrics)
 }
@@ -365,9 +379,16 @@ logreg_mol = function(predictors,
 mol_roc = random_forest_mol(curve_filename = "scBridge_MOLs", 
                             predictors = mol_markers, 
                             mol_ids = mol_ids_bridge)
-mol_xgb = xgb_mol(predictors = mol_markers, mol_ids = mol_ids_bridge) 
 
-mol_logreg = logreg_mol(predictors = mol_markers, mol_ids = mol_ids_bridge) 
+mol_roc = random_forest_mol(curve_filename = "scBridge_MOLs-upG4_MOL", 
+                            predictors = c("Otol1", "Mmp20", "Serpinb3b", "Trim12a", "Glra3",
+                                           "Glra3"), 
+                            mol_ids = intersect(mol_ids_bridge, mol_ids))
+
+mol_xgb = xgb_mol(predictors = all_mol_markers, mol_ids = mol_ids_bridge)
+
+mol_logreg = logreg_mol(predictors = all_mol_markers, mol_ids = mol_ids_bridge, curve_filename = "scBridge_MOLs")
+mol_logreg_negcontrol = logreg_mol(predictors = sample(rownames(g4_counts), size = 200), mol_ids = mol_ids_bridge, curve_filename = "scBridge_random")
 
 # run on OPC markers
 opc_roc = random_forest_mol(curve_filename = "highly_pred_MOLs-OPC_markers-", predictors = opc_markers)

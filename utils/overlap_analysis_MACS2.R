@@ -462,6 +462,97 @@ write.table(
   col.names = FALSE
 )
 
+# unsorted scCut&Tag reso 0.8
+peak_set = "../results/Seurat/final/unsorted_brain/res0.8/cluster_spec_peaks/"
+result_folder = "../results/GenomicRanges/unsorted_outputs/"
+# scCnT data
+cluster0 = fread(glue("{peak_set}0_peaks.narrowPeak"))
+cluster0$type = "cluster0"
+cluster0_gr = GRanges(
+  seqnames = cluster0$V1,
+  ranges = IRanges(
+    start = cluster0$V2,
+    end = cluster0$V3,
+    names = cluster0$type,
+  )
+)
+cluster0_gr$type = "cluster0"
+
+
+cluster1 = fread(glue("{peak_set}1_peaks.narrowPeak"))
+cluster1$type = "cluster1"
+cluster1_gr = GRanges(
+  seqnames = cluster1$V1,
+  ranges = IRanges(
+    start = cluster1$V2,
+    end = cluster1$V3,
+    names = cluster1$type,
+  )
+)
+cluster1_gr$type = "cluster1"
+
+cluster2 = fread(glue("{peak_set}2_peaks.narrowPeak"))
+cluster2$type = "cluster2"
+cluster2_gr = GRanges(
+  seqnames = cluster2$V1,
+  ranges = IRanges(
+    start = cluster2$V2,
+    end = cluster2$V3,
+    names = cluster2$type,
+  )
+)
+cluster2_gr$type = "cluster2"
+
+cluster3 = fread(glue("{peak_set}3_peaks.narrowPeak"))
+cluster3$type = "cluster3"
+cluster3_gr = GRanges(
+  seqnames = cluster3$V1,
+  ranges = IRanges(
+    start = cluster3$V2,
+    end = cluster3$V3,
+    names = cluster3$type,
+  )
+)
+cluster3_gr$type = "cluster3"
+
+cluster4 = fread(glue("{peak_set}4_peaks.narrowPeak"))
+cluster4_gr = GRanges(
+  seqnames = cluster4$V1,
+  ranges = IRanges(
+    start = cluster4$V2,
+    end = cluster4$V3,
+    names = cluster4$type,
+  )
+)
+cluster4_gr$type = "cluster4"
+
+gr = c(cluster0_gr, cluster1_gr, cluster2_gr, cluster3_gr, cluster4_gr)
+grl = splitAsList(gr, gr$type)
+grl = unique(grl)
+
+pdf(
+  file = glue("{result_folder}unsorted_cluster0_1_2_3_4.pdf"),
+  # The directory you want to save the file in
+  width = 8,
+  height = 8
+)
+res = makeVennDiagram(Peaks = grl, NameOfPeaks = names(grl))
+print(res)
+dev.off()
+
+venn_cnt2venn <- function(venn_cnt) {
+  n <- which(colnames(venn_cnt) == "Counts") - 1
+  SetNames = colnames(venn_cnt)[1:n]
+  Weight = venn_cnt[, "Counts"]
+  names(Weight) <- apply(venn_cnt[, 1:n], 1, paste, collapse = "")
+  Venn(SetNames = SetNames, Weight = Weight)
+}
+
+
+v <- venn_cnt2venn(res$vennCounts)
+print(plot(v, doWeights = FALSE))
+
+
 ## mESC-MEF scCut&Tag
 ## generate bed files from overlap analysis for deeptools heatmaps
 bed_output = "../results/GenomicRanges/mESC-MEF_outputs/bulk_overlaps/"

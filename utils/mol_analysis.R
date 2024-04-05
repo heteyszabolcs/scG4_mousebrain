@@ -1,17 +1,22 @@
-suppressPackageStartupMessages({
-  library("tidyverse")
-  library("Signac")
-  library("wigglescout")
-  library("data.table")
-  library("ggplot2")
-  library("glue")
-  library("Seurat")
-  library("matrixStats")
-  library("ComplexHeatmap")
-  library("circlize")
-  library("outliers")
-  library("topGO")
-})
+if (!require("pacman"))
+  install.packages("pacman")
+pacman::p_load("tidyverse",
+               "Seurat",
+               "Signac",
+               "wigglescout",
+               "data.table",
+               "ggplot2",
+               "ggpubr",
+               "glue",
+               "matrixStats",
+               "ComplexHeatmap",
+               "circlize",
+               "topGO",
+               "outliers",
+               "enrichR",
+               "ggrepel",
+               "ggrastr"
+)
 
 # path to result folder
 result_folder = "../results/Seurat/"
@@ -25,6 +30,10 @@ markers = read_tsv("../results/Seurat/final/sorted_brain/res0.1/integration/outp
 markers = markers[markers$p_val < 0.05 &
                         markers$avg_log2FC > 0.5, ]
 
+# scBridge outputs
+rel = fread("../results/scBridge/output/scbridge_reliability.csv")
+pred = fread("../results/scBridge/output/scbridge_predictions.csv", header = TRUE)
+
 zeisel_markers = read_tsv("../data/Zeisel_et_al_2015/Zeisel_et_al_markers.txt", col_names = FALSE)
 marques_markers = read_tsv("../data/GSE75330/marker_genes.txt", col_names = FALSE)
 zeisel_markers = zeisel_markers %>% dplyr::filter(X2 == "Oligodendrocyte")
@@ -36,6 +45,7 @@ anchors = read_tsv("../results/Seurat/final/sorted_brain/res0.1/integration/outp
 
 # prediction scores
 pred_score = readRDS("../results/Seurat/final/sorted_brain/res0.1/integration/outputs/g4_cell_label_preds.Rds")
+
 pred_score = t(pred_score@data)
 ids = rownames(pred_score)
 pred_score = as_tibble(pred_score)
@@ -65,19 +75,49 @@ g4_counts = as.matrix(sorted@assays$GA@data)
 peaks = as.matrix(sorted@assays$peaks@data)
 
 # highly predicted MOL cell ids
-barcodes = pred_score$cell_id[which(pred_score$MOL > 0.75)]
+barcodes_seurat = pred_score$cell_id[which(pred_score$MOL > 0.75)]
+barcodes_scbridge = pred %>% filter(Prediction == "MOL") %>% pull(V1)
+barcodes_scbridge_others = pred %>% filter(Prediction != "MOL") %>% 
+  filter(Prediction != "Novel (Most Unreliable)") %>% 
+  pull(V1)
+barcodes = unique(c(barcodes_seurat, barcodes_scbridge))
+
 barcodes_non_mol = rownames(sorted@meta.data)[which(!rownames(sorted@meta.data) %in% barcodes)]
 
-diff_peaks_MOL_vs_nonMOL = FindMarkers(
+# differential GA scores
+diff_MOL_vs_nonMOL_seurat = FindMarkers(
   sorted,
   ident.1 = barcodes,
   ident.2 = barcodes_non_mol,
-  only.pos = TRUE,
-  assay = "peaks",
+  only.pos = FALSE,
+  assay = "GA",
   logfc.threshold = 0,
   test.use = "LR",
   latent.vars = "peak_region_fragments"
 )
+
+sign_MOL_vs_nonMOL_seurat = diff_MOL_vs_nonMOL_seurat %>% 
+  dplyr::filter(p_val_adj < 0.05) %>%
+  dplyr::filter(avg_log2FC > 0.5) %>% 
+  arrange(desc(avg_log2FC)) %>% 
+  rownames
+
+diff_MOL_vs_nonMOL_scBr = FindMarkers(
+  sorted,
+  ident.1 = barcodes_scbridge,
+  ident.2 = barcodes_scbridge_others,
+  only.pos = FALSE,
+  assay = "GA",
+  logfc.threshold = 0,
+  test.use = "LR",
+  latent.vars = "peak_region_fragments"
+)
+
+sign_MOL_vs_nonMOL_scBr = diff_MOL_vs_nonMOL_scBr %>% 
+  dplyr::filter(p_val_adj < 0.05) %>%
+  dplyr::filter(avg_log2FC > 0.5) %>% 
+  arrange(desc(avg_log2FC)) %>% 
+  rownames
 
 # compute G4 fold changes
 # condition: predicted MOL cells
@@ -115,35 +155,6 @@ genes = mol_filt %>% dplyr::filter(abs(distanceToTSS) < 3000) %>%
   dplyr::filter(fold_change > 10) %>% 
   pull(gene_symbol)
 
-## topGO analysis (source: https://bioconductor.org/packages/devel/bioc/vignettes/topGO/inst/doc/topGO.pdf)
-# create input for GO analysis
-input = rep(0, length(unique(sorted_peaks$SYMBOL)))
-names(input) = unique(sorted_peaks$SYMBOL)
-input[names(input) %in% genes] = 1
-
-GOdata <- new(
-  "topGOdata",
-  ontology = "BP",
-  # use biological process ontology
-  allGenes = input,
-  geneSelectionFun = function(x)
-    (x == 1),
-  annot = annFUN.org,
-  mapping = "org.Mm.eg.db",
-  ID = "symbol"
-)
-
-# Fisher test
-resultFisher <-
-  runTest(GOdata, algorithm = "elim", statistic = "fisher")
-out <-
-  GenTable(GOdata,
-           Fisher = resultFisher,
-           topNodes = 20,
-           numChar = 60)
-
-out = out %>% dplyr::select(Term, Fisher)
-
 ## expression heatmaps
 # Marques et al. oligo scRNA data
 rna = read.table(
@@ -168,7 +179,7 @@ rna = CreateSeuratObject(counts = rna,
 rna = NormalizeData(rna,
                     normalization.method = "LogNormalize",
                     scale.factor = 10000)
-norm = rna[["RNA"]]@data # normalized expression levels
+norm = rna[["RNA"]]$data # normalized expression levels
 
 # retrieve the expression levels of genes with highest G4 signal (100-fold higher than background!)
 top_mol_genes = mol_filt %>% dplyr::filter(abs(distanceToTSS) < 3000) %>% 
@@ -200,6 +211,7 @@ rna@meta.data$merged_cell_class = new_ids
 
 cell_types = as.character(unique(rna@meta.data$merged_cell_class))
 
+## visualizations ##
 # helper function - collect aggregated mean expression by gene
 collect = function(x) {
   m = as.matrix(norm[which(rownames(norm) %in% existing_gene_symbols), rna@meta.data$cellid[which(rna@meta.data$merged_cell_class == x)]])
@@ -596,7 +608,7 @@ x_long = pivot_longer(
   names_to = "barcode",
   values_to = "G4_count"
 )
-x_long = x_long %>% mutate(predictions = "MOL")
+x_long = x_long %>% mutate(predictions = "MOL",  mean = round(mean(G4_count), 3))
 
 y = g4_counts[existing_gene_symbols, which(colnames(g4_counts) != barcodes)]
 rows = rownames(y)
@@ -607,14 +619,14 @@ y_long =
     names_to = "barcode",
     values_to = "G4_count"
   )
-y_long = y_long %>% mutate(predictions = "non-MOL")
+y_long = y_long %>% mutate(predictions = "non-MOL", mean = round(mean(G4_count), 3))
 
 x_y = bind_rows(list(x_long, y_long))
 x_y = x_y %>% dplyr::filter(G4_count > 0)
 
 prediction_violin2 = ggplot(x_y, aes(x = predictions, y = G4_count)) +
   geom_violin(color = "black", fill = "#4682b4") +
-  ylim(0, 4) +
+  ylim(0, 2) +
   labs(
     title = "markers from Zeisel et al and Marques et al",
     x = "prediction",
@@ -627,7 +639,9 @@ prediction_violin2 = ggplot(x_y, aes(x = predictions, y = G4_count)) +
     axis.text.x = element_text(size = 20, color = "black"),
     axis.text.y = element_text(size = 20, color = "black")
   ) +
-  stat_compare_means(label.y = 3, label.x = 1.25, size = 6)
+  stat_compare_means(label.y = 1.75, label.x = 1.25, size = 6) +
+  geom_text(data = x_y, aes(x = predictions, y = 0.5, label = mean),
+            size = 5, vjust = -0.5, color = "white")
 prediction_violin2
 
 ggsave(
@@ -638,7 +652,6 @@ ggsave(
   device = "pdf"
 )
 
-
 ## retrieve the GA scores of highly predicted MOL cells (at top MOL specific G4 genes)
 existing_gene_symbols = character()
 for (gene in top_mol_genes) {
@@ -646,7 +659,7 @@ for (gene in top_mol_genes) {
     existing_gene_symbols = c(existing_gene_symbols, gene)
   }
 }
-existing_gene_symbols = existing_gene_symbols[1:10]
+#existing_gene_symbols = existing_gene_symbols[1:10]
 existing_gene_symbols = existing_gene_symbols[!is.na(existing_gene_symbols)]
 
 g4_top_mol_counts = rowMeans(g4_counts[existing_gene_symbols, barcodes])
@@ -712,7 +725,7 @@ x_long = pivot_longer(
   names_to = "barcode",
   values_to = "G4_count"
 )
-x_long = x_long %>% mutate(predictions = "MOL")
+x_long = x_long %>% mutate(predictions = "MOL",  mean = round(mean(G4_count), 3))
 
 y = g4_counts[existing_gene_symbols, which(colnames(g4_counts) != barcodes)]
 rows = rownames(y)
@@ -723,7 +736,7 @@ y_long =
     names_to = "barcode",
     values_to = "G4_count"
   )
-y_long = y_long %>% mutate(predictions = "non-MOL")
+y_long = y_long %>% mutate(predictions = "non-MOL", mean = round(mean(G4_count), 3))
 
 x_y = bind_rows(list(x_long, y_long))
 x_y = x_y %>% dplyr::filter(G4_count > 0)
@@ -743,7 +756,9 @@ prediction_violin3 = ggplot(x_y, aes(x = predictions, y = G4_count)) +
     axis.text.x = element_text(size = 20, color = "black"),
     axis.text.y = element_text(size = 20, color = "black")
   ) +
-  stat_compare_means(label.y = 2.5, label.x = 1.25, size = 6)
+  stat_compare_means(label.y = 2.5, label.x = 1.25, size = 6) +
+  geom_text(data = x_y, aes(x = predictions, y = 0.5, label = mean),
+            size = 5, vjust = -0.5, color = "white")
 prediction_violin3
 
 ggsave(
@@ -827,7 +842,7 @@ for (gene in top_G4_count_of_MOLs) {
     existing_gene_symbols = c(existing_gene_symbols, gene)
   }
 }
-existing_gene_symbols = existing_gene_symbols[1:10]
+#existing_gene_symbols = existing_gene_symbols[1:10]
 
 collect = function(x) {
   m = as.matrix(norm[which(rownames(norm) %in% existing_gene_symbols), rna@meta.data$cellid[which(rna@meta.data$merged_cell_class == x)]])
@@ -837,11 +852,15 @@ collect = function(x) {
 expr = lapply(cell_types, collect)
 expr = bind_rows(expr)
 mat = pivot_wider(expr, id_cols = gene_symbol, names_from = type, values_from = means)
+highest_vars = mat %>% dplyr::select(-gene_symbol) %>% as.matrix
+rownames(highest_vars) = mat$gene_symbol
+highest_vars = mat$gene_symbol[order(rowVars(highest_vars), decreasing = TRUE)][1:20]
+expr = expr %>% dplyr::filter(gene_symbol %in% highest_vars)
 
 # visualize by heatmap - genes w/ top MOL specific G4 promoters
-y_order = mat %>% mutate(mean = rowMeans(dplyr::select(mat, -gene_symbol), na.rm = TRUE)) %>% arrange(mean) %>%
-  pull(gene_symbol)
-y_order = factor(expr$gene_symbol, levels = y_order)
+mat = mat %>% dplyr::filter(gene_symbol %in% highest_vars)
+y_order = mat %>% dplyr::filter(gene_symbol %in% highest_vars)
+y_order = factor(expr$gene_symbol, levels = rev(highest_vars))
 
 x_order = mat %>% dplyr::select(-gene_symbol) %>% as.matrix
 x_order = colMeans(x_order)
@@ -857,8 +876,8 @@ hm_top_G4_count_of_MOLs = ggplot(expr, aes(x = x_order, y = y_order, fill = mean
     low = "#a6bddb",
     mid = "#FFFFCC",
     high = "#fc9272",
-    midpoint = 0.5,
-    limits = c(0, 1)
+    midpoint = 2,
+    limits = c(0, 4)
   ) +
   xlab(label = "oligodendrocyte subtype") +
   ylab(label = "genes with highest G4 count in MOLs") +
@@ -890,123 +909,287 @@ ggsave(
 )
 
 # genome browser examples
-# Seurat objects
+# Seurat object
 sorted = readRDS(file = "../results/Seurat/callpeaks_GFPsorted/GFPsorted.Rds")
 
 meta = sorted@meta.data
-meta = meta %>% mutate(MOL_status = ifelse(rownames(meta) %in% barcodes, "predicted MOL", "predicted non-MOL"))
+meta = meta %>% 
+  mutate(MOL_status = ifelse(rownames(meta) %in% barcodes, "predicted MOL", "predicted non-MOL")) %>% 
+  mutate(MOL_status_scBridge = ifelse(rownames(meta) %in% barcodes_scbridge, "predicted MOL", "predicted non-MOL"))
 sorted@meta.data = meta
 
-# for(gene in genes) {
-#   plot = CoveragePlot(
-#     object = sorted,
-#     region = gene,
-#     annotation = TRUE,
-#     show.bulk = TRUE,
-#     ymax = 5,
-#     group.by = "MOL_status",
-#     peaks = TRUE
-#   ) + scale_fill_brewer(type = "seq", palette = "Set3")
-#   print(plot)
-# }
+genes = markers %>% dplyr::filter(cluster == "MOL") %>% arrange(desc(avg_log2FC)) %>% top_n(6, wt = avg_log2FC) %>% pull(gene)
+ctrl = markers %>% dplyr::filter(cluster == "OPC") %>% arrange(desc(avg_log2FC)) %>% top_n(6, wt = avg_log2FC) %>% pull(gene)
 
-tmem88b = CoveragePlot(
-  object = sorted,
-  region = "Tmem88b",
-  annotation = TRUE,
-  show.bulk = TRUE,
-  ymax = 10,
-  group.by = "MOL_status",
-  peaks = TRUE
-) + scale_fill_brewer(type = "seq", palette = "Set3")
+plots = list()
+for(i in seq(1:length(genes))) {
+  plots[[i]] = CoveragePlot(
+    object = sorted,
+    region = genes[i],
+    annotation = TRUE,
+    show.bulk = TRUE,
+    ymax = 5,
+    group.by = "MOL_status",
+    peaks = TRUE
+  )
+  print(plot)
+}
 
-ndrg1 = CoveragePlot(
-  object = sorted,
-  region = "Ndrg1",
-  annotation = TRUE,
-  show.bulk = TRUE,
-  ymax = 10,
-  group.by = "MOL_status",
-  peaks = TRUE
-) + scale_fill_brewer(type = "seq", palette = "Set3")
-
-serpinb1a = CoveragePlot(
-  object = sorted,
-  region = "Serpinb1a",
-  annotation = TRUE,
-  show.bulk = TRUE,
-  ymax = 10,
-  group.by = "MOL_status",
-  peaks = TRUE
-) + scale_fill_brewer(type = "seq", palette = "Set3")
-
-oxr1 = CoveragePlot(
-  object = sorted,
-  region = "Oxr1",
-  annotation = TRUE,
-  show.bulk = TRUE,
-  ymax = 5,
-  group.by = "MOL_status",
-  peaks = TRUE
-) + scale_fill_brewer(type = "seq", palette = "Set3") 
-
-anln = CoveragePlot(
-  object = sorted,
-  region = "Anln",
-  annotation = TRUE,
-  show.bulk = TRUE,
-  group.by = "MOL_status",
-  peaks = TRUE
-) + scale_fill_brewer(type = "seq", palette = "Set3")
-
-sepp1 = CoveragePlot(
-  object = sorted,
-  region = "Sepp1",
-  annotation = TRUE,
-  show.bulk = TRUE,
-  group.by = "MOL_status",
-  peaks = TRUE
-) + scale_fill_brewer(type = "seq", palette = "Set3")
-
-examples = ggarrange(ndrg1, anln, serpinb1a, ncol = 1, nrow = 3)
+examples = ggarrange(plotlist = plots, ncol = 2, nrow = 3)
 
 ggsave(
-  glue("{result_folder}MOL_markers-G4_score_examples.pdf"),
+  glue("{result_folder}MOL_markers-browser_example.pdf"),
   plot = examples,
-  width = 6,
-  height = 9,
+  width = 12,
+  height = 12,
   device = "pdf"
 )
 
-olfml1 = CoveragePlot(
-  object = sorted,
-  region = "Olfml1",
-  annotation = TRUE,
-  group.by = "MOL_status",
-  peaks = TRUE
-) + scale_fill_brewer(type = "seq", palette = "Set3")
+plots = list()
+for(i in seq(1:length(genes))) {
+  mol = norm[genes[i], rownames(rna@meta.data[which(rna@meta.data$merged_cell_class == "MOL"),])]
+  mol = tibble(type = "MOL", expr = mol)
+  nonmol = norm[genes[i], rownames(rna@meta.data[which(rna@meta.data$merged_cell_class != "MOL"),])]
+  nonmol = tibble(type = "non-MOL", expr = nonmol)
+  both = rbind(mol, nonmol)
+  plots[[i]] = ggplot(both, aes(x = type, y = expr, fill = type)) +
+    geom_boxplot(color = "black") +
+    ylim(0, 8) +
+    labs(
+      title = genes[i],
+      x = "",
+      y = "log norm. expr"
+    ) +
+    theme_classic() +
+    theme(
+      text = element_text(size = 20),
+      plot.title = element_text(size = 15),
+      axis.text.x = element_text(size = 20, color = "black"),
+      axis.text.y = element_text(size = 20, color = "black")
+    ) +
+    stat_compare_means(label.y = 7, label.x = 1.15, size = 6)
+}
+  
+bp_examples = ggarrange(plotlist = plots, ncol = 2, nrow = 3)
 
 ggsave(
-  glue("{result_folder}MOL_markers-olfml1.pdf"),
-  plot = olfml1,
-  width = 6,
-  height = 6,
+  glue("{result_folder}MOL_markers-browser_example-expr_bps.pdf"),
+  plot = bp_examples,
+  width = 12,
+  height = 12,
   device = "pdf"
 )
 
-cspg5 = CoveragePlot(
-  object = sorted,
-  region = "Cspg5",
-  annotation = TRUE,
-  group.by = "seurat_clusters",
-  peaks = TRUE
-) + scale_fill_brewer(type = "seq", palette = "Set3")
+plots = list()
+g4_counts = sorted@assays$GA@data
+for(i in seq(1:length(genes))) {
+  mol = g4_counts[genes[i], which(colnames(g4_counts) %in% barcodes_scbridge)]
+  mol = tibble(type = "MOL", g4 = mol)
+  nonmol = g4_counts[genes[i], which(colnames(g4_counts) %in% barcodes_scbridge_others)]
+  nonmol = tibble(type = "non-MOL", g4 = nonmol)
+  both = rbind(mol, nonmol)
+  both = both %>% dplyr::filter(g4 > 0)
+  plots[[i]] = ggplot(both, aes(x = type, y = g4, fill = type)) +
+    geom_boxplot(color = "black") +
+    ylim(0, 1.5) +
+    labs(
+      title = genes[i],
+      x = "",
+      y = "log norm. G4"
+    ) +
+    theme_classic() +
+    theme(
+      text = element_text(size = 20),
+      plot.title = element_text(size = 15),
+      axis.text.x = element_text(size = 20, color = "black"),
+      axis.text.y = element_text(size = 20, color = "black")
+    ) +
+    stat_compare_means(label.y = 1.2, label.x = 1.15, size = 6)
+}
 
-zfp407 = CoveragePlot(
-  object = sorted,
-  region = "Zfp407",
-  annotation = TRUE,
-  show.bulk = TRUE,
-  group.by = "MOL_status",
-  peaks = TRUE
-) + scale_fill_brewer(type = "seq", palette = "Set3")
+bp_g4_examples = ggarrange(plotlist = plots, ncol = 2, nrow = 3)
+
+ggsave(
+  glue("{result_folder}MOL_markers-browser_example-g4count_bps.pdf"),
+  plot = bp_g4_examples,
+  width = 12,
+  height = 12,
+  device = "pdf"
+)
+
+plots = list()
+for(i in seq(1:length(sign_MOL_vs_nonMOL_scBr[1:6]))) {
+  plots[[i]] = CoveragePlot(
+    object = sorted,
+    region = sign_MOL_vs_nonMOL_scBr[i],
+    annotation = TRUE,
+    show.bulk = TRUE,
+    ymax = 5,
+    group.by = "MOL_status_scBridge",
+    peaks = TRUE
+  )
+  print(plots[[i]])
+}
+
+sign_scBridge_genes = ggarrange(plotlist = plots, ncol = 2, nrow = 3)
+
+# ggsave(
+#   glue("{result_folder}MOL_markers-browser_example-sign_up_scBr.png"),
+#   plot = sign_scBridge_genes,
+#   width = 12,
+#   height = 12,
+#   dpi = 1200
+# )
+
+ggsave(
+  glue("{result_folder}MOL_markers-browser_example-sign_up_scBr.pdf"),
+  plot = sign_scBridge_genes,
+  width = 12,
+  height = 12,
+  device = "pdf"
+)
+
+plots = list()
+for(i in seq(1:length(sign_MOL_vs_nonMOL_scBr[1:6]))) {
+  mol = norm[sign_MOL_vs_nonMOL_scBr[i], rownames(rna@meta.data[which(rna@meta.data$merged_cell_class == "MOL"),])]
+  mol = tibble(type = "MOL", expr = mol)
+  nonmol = norm[sign_MOL_vs_nonMOL_scBr[i], rownames(rna@meta.data[which(rna@meta.data$merged_cell_class != "MOL"),])]
+  nonmol = tibble(type = "non-MOL", expr = nonmol)
+  both = rbind(mol, nonmol)
+  plots[[i]] = ggplot(both, aes(x = type, y = expr, fill = type)) +
+    geom_boxplot(color = "black") +
+    ylim(0, 8) +
+    labs(
+      title = sign_MOL_vs_nonMOL_scBr[i],
+      x = "",
+      y = "log norm. expr"
+    ) +
+    theme_classic() +
+    theme(
+      text = element_text(size = 20),
+      plot.title = element_text(size = 15),
+      axis.text.x = element_text(size = 20, color = "black"),
+      axis.text.y = element_text(size = 20, color = "black")
+    ) +
+    stat_compare_means(label.y = 7, label.x = 1.15, size = 6)
+}
+
+sign_scBridge_genes_expr_bp = ggarrange(plotlist = plots, ncol = 2, nrow = 3)
+
+ggsave(
+  glue("{result_folder}MOL_markers-browser_example-expr_bps.pdf"),
+  plot = sign_scBridge_genes_expr_bp,
+  width = 12,
+  height = 12,
+  device = "pdf"
+)
+
+plots = list()
+for(i in 1:length(sign_MOL_vs_nonMOL_scBr[1:6])) {
+  mol = g4_counts[sign_MOL_vs_nonMOL_scBr[i], which(colnames(g4_counts) %in% barcodes_scbridge)]
+  mol = tibble(type = "MOL", g4 = mol)
+  nonmol = g4_counts[sign_MOL_vs_nonMOL_scBr[i], which(colnames(g4_counts) %in% barcodes_scbridge_others)]
+  nonmol = tibble(type = "non-MOL", g4 = nonmol)
+  both = rbind(mol, nonmol)
+  both = both %>% dplyr::filter(g4 > 0)
+  plots[[i]] = ggplot(both, aes(x = type, y = g4, fill = type)) +
+    geom_boxplot(color = "black") +
+    ylim(0, 1.5) +
+    labs(
+      title = sign_MOL_vs_nonMOL_scBr[i],
+      x = "",
+      y = "log norm. G4"
+    ) +
+    theme_classic() +
+    theme(
+      text = element_text(size = 20),
+      plot.title = element_text(size = 15),
+      axis.text.x = element_text(size = 20, color = "black"),
+      axis.text.y = element_text(size = 20, color = "black")
+    ) +
+    stat_compare_means(label.y = 1.2, label.x = 1.15, size = 6)
+}
+
+sign_scBridge_genes_g4_bp = ggarrange(plotlist = plots, ncol = 2, nrow = 3)
+
+ggsave(
+  glue("{result_folder}MOL_markers-browser_example-g4count_bps.pdf"),
+  plot = sign_scBridge_genes_g4_bp,
+  width = 12,
+  height = 12,
+  device = "pdf"
+)
+
+# volcano plot
+volc_input = diff_MOL_vs_nonMOL_scBr %>% 
+  mutate(gene_name = rownames(.)) 
+
+volc_input = volc_input %>% mutate(group = case_when(
+  avg_log2FC > 0.5 & p_val_adj < 0.05 ~ "up",
+  avg_log2FC < -0.5 & p_val_adj < 0.05 ~ "down",
+  avg_log2FC >= -0.5 & avg_log2FC <= 0.5 ~ "unaltered",
+  p_val_adj > 0.05 ~ "unaltered"
+)) %>%
+  mutate(sign_label = case_when(avg_log2FC > 0.5 & p_val_adj < 0.05 ~ gene_name,
+                                avg_log2FC < -0.5 & p_val_adj < 0.05 ~ gene_name,
+                                avg_log2FC >= -0.5 & avg_log2FC <= 0.5 ~ ""))
+labels = volc_input %>% pull(sign_label)
+
+# add color, size, alpha indications
+cols = c("up" = "#fc9272", "down" = "#a1d99b", "unaltered" = "grey")
+sizes = c("up" = 4, "down" = 4, "unaltered" = 2)
+alphas = c("up" = 1, "down" = 1, "unaltered" = 0.5)
+
+# plot
+ggplot_volc = volc_input %>%
+  ggplot(aes(x = avg_log2FC,
+             y = -log10(p_val_adj),
+             fill = group,    
+             size = group,
+             alpha = group)) +
+  ggrastr::geom_point_rast(shape = 21, # Specify shape and colour as fixed local parameters    
+                           colour = "black") +
+  geom_hline(yintercept = -log10(0.05),
+             linetype = "dashed") +
+  geom_vline(xintercept = c(-0.5, 0.5),
+             linetype = "dashed") +
+  scale_fill_manual(values = cols) + # Modify point colour
+  scale_size_manual(values = sizes) + # Modify point size
+  scale_alpha_manual(values = alphas) + # Modify point transparency
+  scale_x_continuous(breaks = c(seq(-2, 2, 0.5)),  	 
+                     limits = c(-2, 2)) +
+  scale_y_continuous(breaks = c(seq(0, 10, 2)),  	 
+                     limits = c(0, 10)) +
+  labs(
+    title = "predicted MOL vs other G4 differences",
+    x = "log2FoldChange",
+    y = "-log10 adj.p-value",
+    fill = " "
+  ) +
+  guides(alpha = FALSE, size = FALSE, fill = guide_legend(override.aes = list(size = 5))) +
+  theme_minimal() +
+  theme(
+    text = element_text(size = 16),
+    legend.text = element_text(size = 14),
+    plot.title = element_text(size = 16, face = "bold"),
+    axis.text.x = element_text(size = 14, color = "black"),
+    axis.text.y = element_text(size = 14, color = "black"),
+    axis.title.x = element_text(size = 20, color = "black"),
+    axis.title.y = element_text(size = 20, color = "black")
+  ) +
+  geom_text_repel(label = labels, size = 6) # add labels
+ggplot_volc
+
+# export in pdf and png
+ggsave(
+  glue("{result_folder}scBr_predMOL_vs_nonMOL_volc.pdf"),
+  width = 8,
+  height = 8,
+  device = "pdf"
+)
+ggsave(
+  glue("{result_folder}scBr_predMOL_vs_nonMOL_volc.png"),
+  width = 8,
+  height = 8,
+  dpi = 300
+)

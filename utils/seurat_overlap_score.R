@@ -82,8 +82,10 @@ hm = Heatmap(
   name = "overlap score",
   clustering_distance_rows = "pearson",
   col = col_fun,
-  row_title = "",
-  column_title = "Seurat",
+  row_title = "Seurat prediction",
+  row_title_side = "right",
+  column_title = "Seurat cluster",
+  column_title_side = "bottom",
   show_row_names = TRUE,
   rect_gp = gpar(col = "black", lwd = 1),
   cluster_columns = TRUE,
@@ -97,8 +99,8 @@ dev.off()
 
 # scBridge integration
 meta = seurat@meta.data %>% mutate(cell_id = rownames(seurat@meta.data)) %>% 
-  left_join(., rel, c("cell_id" = "V1")) %>% rename(scBridge_reliability = "Reliability") %>% 
-  left_join(., pred, c("cell_id" = "V1")) %>% rename(scBridge_prediction = "Prediction") %>% 
+  left_join(., rel, c("cell_id" = "V1")) %>% dplyr::rename(scBridge_reliability = "Reliability") %>% 
+  left_join(., pred, c("cell_id" = "V1")) %>% dplyr::rename(scBridge_prediction = "Prediction") %>% 
   filter(scBridge_reliability > 0.9)
 
 ident2rna = data.frame(idents = rownames(meta), rna_label = meta$scBridge_prediction)
@@ -131,8 +133,10 @@ hm2 = Heatmap(
   name = "overlap score",
   clustering_distance_rows = "pearson",
   col = col_fun,
-  row_title = "",
-  column_title = "scBridge",
+  row_title = "scBridge prediction",
+  row_title_side = "right",
+  column_title = "Seurat cluster",
+  column_title_side = "bottom",
   show_row_names = TRUE,
   rect_gp = gpar(col = "black", lwd = 1),
   cluster_columns = TRUE,

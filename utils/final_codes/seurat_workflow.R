@@ -331,12 +331,14 @@ if(res == 0.1) {
 # indicate doublets
 print("UMAP of DoubletFinder")
 DF.name = colnames(doublet_test@meta.data)[grepl("DF.classification", colnames(doublet_test@meta.data))]
-doublets = DimPlot(doublet_test, group.by = DF.name, pt.size = 0.3) +
+doublets = DimPlot(doublet_test, group.by = DF.name, pt.size = 0.3, order = "Doublet") +
+  scale_color_manual(values = c("grey", "#de2d26")) + 
   xlim(-10, 10) +
   ylim(-10, 10) +
   ggtitle("Doublet finder")
 
 doublet_ctrl = DimPlot(doublet_test, group.by = "orig.ident", pt.size = 0.3) +
+  scale_color_manual(values = "#de2d26") + 
   xlim(-10, 10) +
   ylim(-10, 10) +
   ggtitle("")
@@ -344,7 +346,7 @@ doublet_ctrl = DimPlot(doublet_test, group.by = "orig.ident", pt.size = 0.3) +
 ggsave(
   glue("{workdir}/plots/Seurat_doublets.png"),
   plot = doublets,
-  width = 10,
+  width = 5,
   height = 5,
   dpi = 300
 )
@@ -353,14 +355,14 @@ ggsave(
   glue("{workdir}/plots/Seurat_doublets.pdf"),
   device = "pdf",
   plot = doublets,
-  width = 10,
+  width = 5,
   height = 5
 )
 
 ggsave(
   glue("{workdir}/plots/Seurat_doublets_ctrl.png"),
   plot = doublet_ctrl,
-  width = 10,
+  width = 5,
   height = 5,
   dpi = 300
 )
@@ -369,7 +371,7 @@ ggsave(
   glue("{workdir}/plots/Seurat_doublets_ctrl.pdf"),
   device = "pdf",
   plot = doublet_ctrl,
-  width = 10,
+  width = 5,
   height = 5
 )
 

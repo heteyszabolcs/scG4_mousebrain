@@ -71,7 +71,8 @@ domain_pal = {"Marques_scRNA-Seq" : sns.color_palette("pastel")[0],
               "scCutTag_gene_activity_scores" : sns.color_palette("pastel")[1]}
 sc.pl.umap(comb, color='Domain', palette = domain_pal, save = "Domains.pdf")
 
-
+comb.write('C:/Szabolcs/Karolinska/Data/Jing/LTRIS2_BRG1_H33_G4s/results/scBridge/output/combined.h5ad',
+               compression="gzip")
 
 
 

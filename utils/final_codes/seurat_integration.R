@@ -344,7 +344,7 @@ coembed@meta.data$cell_class = new_ids
 
 # Feature plots
 create_expr_feature_plot = function(marker_gene) {
-  # keep G4 scCut&Tag part of coembedding
+  # keep scRNA-Seq part of coembedding
   coembed.scrna = coembed[,coembed$data_type == "scRNA-Seq (Marques et al.)"]
   
   # feature plot
