@@ -67,15 +67,22 @@ plot_connections(
   connection_width = .5
 )
 
-# cicero on predicted MOL
-g4 = readRDS(file = "../results/Seurat/final/sorted_brain/res0.8/outputs/Seurat_object.Rds")
+# cicero on scBridge predictions
+g4 = readRDS(file = "../results/Seurat/callpeaks_GFPsorted/GFPsorted.Rds")
+
+# scBridge outputs
 pred = fread("../results/scBridge/output/scbridge_predictions.csv", header = TRUE)
 barcodes_scbridge = pred %>% filter(Prediction == "MOL") %>% pull(V1)
 other = setdiff(colnames(g4@assays$GA@counts), barcodes_scbridge)
 
+g4@meta.data = g4@meta.data %>% 
+  mutate(rownames_to_column(., var = "cell_id")) %>% 
+  mutate(MOL_status = ifelse(cell_id %in% barcodes_scbridge, "MOL", "non-MOL"))
+
 g4_pred_mol = subset(g4, cells = barcodes_scbridge)
 g4_pred_nonmol = subset(g4, cells = other)
 
+# helper function
 cicero_function = function(seurat_object, label, output_path) {
   input_cds = monocle3::new_cell_data_set(
     expression_data =  seurat_object[['peaks']]@counts,
@@ -108,11 +115,31 @@ cicero_function = function(seurat_object, label, output_path) {
   
   # finding cis-Coaccessibility networks (CCANS), coaccess_cutoff_override > 0.5 strict
   CCAN_assigns = generate_ccans(conns, coaccess_cutoff_override = 0.1)
-  save(CCAN_assigns, file = "{output_path}sorted_cicero_coG4networks-{label}.Rds")
+  save(CCAN_assigns, file = glue("{output_path}sorted_cicero_coG4networks-{label}.Rds"))
   
   return(CCAN_assigns)
 }
 
+# cicero on MOL predictions
 pred_mol = cicero_function(seurat_object = g4_pred_mol, label = "predMOL", 
                            output_path = "../results/Seurat/callpeaks_GFPsorted/")
+
+load(file = "../results/Seurat/callpeaks_GFPsorted/sorted_cicero-predMOL.Rds")
+pred_mol_links = ConnectionsToLinks(conns = conns, ccans = pred_mol)
+Links(g4) = pred_mol_links
+
+pred_nonmol = cicero_function(seurat_object = g4_pred_nonmol, label = "pred_nonMOL",
+                              output_path = "../results/Seurat/callpeaks_GFPsorted/")
+
+
+
+CoveragePlot(g4, region = "chr4-39340342-39349928", annotation = TRUE,
+             show.bulk = TRUE, group.by = "MOL_status")
+CoveragePlot(g4, region = "chr17-39838143-39851630", annotation = TRUE,
+             show.bulk = TRUE, group.by = "MOL_status")
+
+
+
+
+
 

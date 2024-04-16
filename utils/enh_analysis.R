@@ -142,7 +142,7 @@ dev.off()
 k27ac_li_enh = bw_loci(k27ac, loci = li_enh)
 k27ac_li_enh = as_tibble(k27ac_li_enh)
 k27ac_li_enh = k27ac_li_enh %>% dplyr::filter(possorted_RPGC > quantile(k27ac_li_enh$possorted_RPGC, 0.75))
-k27ac_li_enh$type = "Cruz-Molina_active_enh"
+k27ac_li_enh$type = "Li_et_al_mouse_brain_enhancers-k27ac"
 k27ac_li_enh = GRanges(
   seqnames = k27ac_li_enh$seqnames,
   ranges = IRanges(
@@ -151,6 +151,8 @@ k27ac_li_enh = GRanges(
     names = k27ac_li_enh$type
   )
 )
+
+saveRDS(k27ac_li_enh, "../results/GenomicRanges/Li_et_al-mousebrain.union.cCRE_with_K27ac.Rds")
 
 # mESC K27ac
 mesc_k27ac_enh = bw_loci(mesc_k27ac, loci = li_enh)
