@@ -52,6 +52,18 @@ parameters:
 
 It makes a multi-omics integration across GFP sorted G4 scCut&Tag and [_Marques et al._ oigodendrocyte scRNA-Seq](https://www.science.org/doi/10.1126/science.aaf6463) data using Seurat's FindTransferAnchors function. It attempts to label the G4 clusters by label imputation using TransferData function. 
 
+### scBridge integration
+
+scBridge is a neural network driven single-cell multi-omics data integration tool taking advantages of the existing data heterogeneity ([_Yunfan Li et al., 2023_](https://www.nature.com/articles/s41467-023-41795-5))
+
+Installation: [scBridge github](https://github.com/XLearning-SCU/scBridge)
+
+Note: scBridge runs on a single GPU.
+
+1. _create_h5ad.py_ - Create h5ad format from gene activity scores and scRNA-Seq counts
+2. _scbridge.sh_ - Run on cluster with GPU
+3. _scbridge_outputs.py_ - Visualization
+
 
 # Data
 
