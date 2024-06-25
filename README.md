@@ -2,7 +2,7 @@
 
 ## Main steps includes: 
 
-* Seurat processing of G scCut&Tag 
+* Seurat processing of G4 scCut&Tag 
 * generating cluster specific bam and bigwig files 
 * integration with _Marques et al._ scRNA-Seq data 
 
