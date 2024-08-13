@@ -180,14 +180,14 @@ g4 = RunUMAP(object = g4,
 # nExp <- round(ncol(g4_doublet_test) * 0.04)  # expect 4% doublets
 # g4_doublet_test <- doubletFinder_v3(g4_doublet_test, pN = 0.25, pK = 0.09, nExp = nExp, PCs = 1:10)
 # DF.name = colnames(g4_doublet_test@meta.data)[grepl("DF.classification", colnames(g4_doublet_test@meta.data))]
-# umap = DimPlot(g4_doublet_test, group.by = "orig.ident", pt.size = 0.3) + 
+# umap = DimPlot(g4_doublet_test, group.by = "orig.ident", pt.size = 0.3) +
 #   xlim(-10, 10) +
 #   ylim(-10, 10) +
 #   ggtitle("MEF-mESC G4 scCnT")
 # 
 # # indicate doublets
-# doublets = DimPlot(g4_doublet_test, group.by = DF.name, pt.size = 0.3) + 
-#   xlim(-10, 10) + 
+# doublets = DimPlot(g4_doublet_test, group.by = DF.name, pt.size = 0.3) +
+#   xlim(-10, 10) +
 #   ylim(-10, 10) +
 #   ggtitle("Doublet finder")
 # 

@@ -14,7 +14,7 @@ pacman::p_load("data.table",
 
 # Seurat object
 # scG4 - scRNA integrated
-seurat = readRDS("../results/Seurat/final/sorted_brain/res0.8/integration/outputs/G4_Marques_scRNA_integration.Rds")
+seurat = readRDS("../results/Seurat/final/sorted_brain/res0.8/integration/outputs/G4_scRNA_integration.Rds")
 meta = seurat@meta.data
 
 # scBridge outputs

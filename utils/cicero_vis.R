@@ -6,7 +6,10 @@ suppressMessages({
   library("data.table")
   library("tidyverse")
   library("glue")
+  library("ggpubr")
 })
+
+set.seed(42)
 
 # result folder
 result_folder = "../results/genome_browser/Figure_4/"
@@ -33,28 +36,28 @@ g4 = readRDS(file = "../results/Seurat/callpeaks_GFPsorted/GFPsorted.Rds")
 # scBridge outputs
 pred = fread("../results/scBridge/output/scbridge_predictions.csv",
              header = TRUE)
-barcodes_scbridge = pred %>% filter(Prediction == "MOL") %>% pull(V1)
+barcodes_scbridge = pred %>% filter(Prediction == "Astrocytes") %>% pull(V1)
 other = setdiff(colnames(g4@assays$GA@counts), barcodes_scbridge)
 
 g4@meta.data = g4@meta.data %>%
   mutate(rownames_to_column(., var = "cell_id")) %>%
-  mutate(MOL_status = ifelse(cell_id %in% barcodes_scbridge, "MOL", "non-MOL"))
+  mutate(AST_status = ifelse(cell_id %in% barcodes_scbridge, "AST", "non-AST"))
 
 # cicero outputs
-load("../results/Seurat/callpeaks_GFPsorted/sorted_cicero-pred_nonMOL.Rds")
+load("../results/Seurat/callpeaks_GFPsorted/sorted_cicero-pred_nonAST.Rds")
 load(
-  "../results/Seurat/callpeaks_GFPsorted/sorted_cicero_coG4networks-pred_nonMOL.Rds"
+  "../results/Seurat/callpeaks_GFPsorted/sorted_cicero_coG4networks-pred_nonAST.Rds"
 )
-nonMOL = conns
-nonMOL_ccan = CCAN_assigns
+nonAST = conns
+nonAST_ccan = CCAN_assigns
 rm(conns)
-load("../results/Seurat/callpeaks_GFPsorted/sorted_cicero-predMOL.Rds")
-load("../results/Seurat/callpeaks_GFPsorted/sorted_cicero_coG4networks-predMOL.Rds")
-MOL = conns
-MOL_ccan = pred_mol
+load("../results/Seurat/callpeaks_GFPsorted/sorted_cicero-predAST.Rds")
+load("../results/Seurat/callpeaks_GFPsorted/sorted_cicero_coG4networks-predAST.Rds")
+AST = conns
+AST_ccan = CCAN_assigns
 rm(conns)
 
-nonMOL_x = nonMOL %>%
+nonAST_x = nonAST %>%
   dplyr::filter(coaccess > 0.5) %>%
   separate(Peak1,
            sep = "-",
@@ -66,16 +69,16 @@ nonMOL_x = nonMOL %>%
   mutate(start1 = as.numeric(start1), end2 = as.numeric(end2)) %>%
   dplyr::filter(start1 < end2)
 
-nonMOL_x$type = "non-MOL"
-nonMOL_peakset = GRanges(
-  seqnames = nonMOL_x$chr1,
+nonAST_x$type = "non-AST"
+nonAST_peakset = GRanges(
+  seqnames = nonAST_x$chr1,
   ranges = IRanges(
-    start = nonMOL_x$start1,
-    end = nonMOL_x$end2,
-    names = nonMOL_x$type,
+    start = nonAST_x$start1,
+    end = nonAST_x$end2,
+    names = nonAST_x$type,
   )
 )
-MOL_x = MOL %>%
+AST_x = AST %>%
   dplyr::filter(coaccess > 0.5) %>%
   separate(Peak1,
            sep = "-",
@@ -87,40 +90,40 @@ MOL_x = MOL %>%
   mutate(start1 = as.numeric(start1), end2 = as.numeric(end2)) %>%
   dplyr::filter(start1 < end2)
 
-MOL_x$type = "MOL"
-MOL_peakset = GRanges(
-  seqnames = MOL_x$chr1,
+AST_x$type = "AST"
+AST_peakset = GRanges(
+  seqnames = AST_x$chr1,
   ranges = IRanges(
-    start = MOL_x$start1,
-    end = MOL_x$end2,
-    names = MOL_x$type,
+    start = AST_x$start1,
+    end = AST_x$end2,
+    names = AST_x$type,
   )
 )
 
-# find MOL spec G4 regions
-ol = findOverlaps(MOL_peakset,
-                  nonMOL_peakset,
+# find AST spec G4 regions
+ol = findOverlaps(AST_peakset,
+                  nonAST_peakset,
                   type = "any",
                   ignore.strand = FALSE)
 
-MOL_spec = as_tibble(MOL_peakset[-queryHits(ol)])
-MOL_spec_regions = MOL_spec %>% mutate(region = paste(seqnames, start, end, sep = "-")) %>%
+AST_spec = as_tibble(AST_peakset[-queryHits(ol)])
+AST_spec_regions = AST_spec %>% mutate(region = paste(seqnames, start, end, sep = "-")) %>%
   pull(region)
 
-# find MOL spec G4 regions over cCREs
-ol_w_enh = findOverlaps(MOL_peakset[-queryHits(ol)],
+# find AST spec G4 regions over cCREs
+ol_w_enh = findOverlaps(AST_peakset[-queryHits(ol)],
                         li_enh,
                         type = "any",
                         ignore.strand = FALSE)
-MOL_spec_enh_regions = as_tibble(MOL_peakset[-queryHits(ol)][queryHits(ol_w_enh)])
-MOL_spec_enh_regions = distinct_all(MOL_spec_enh_regions) %>%
+AST_spec_enh_regions = as_tibble(AST_peakset[-queryHits(ol)][queryHits(ol_w_enh)])
+AST_spec_enh_regions = distinct_all(AST_spec_enh_regions) %>%
   mutate(region = paste(seqnames, start, end, sep = "-")) %>%
   pull(region)
 
 
 # make genome browser figures
-pred_mol_links = ConnectionsToLinks(conns = MOL, ccans = MOL_ccan)
-Links(g4) = pred_mol_links
+pred_AST_links = ConnectionsToLinks(conns = AST, ccans = AST_ccan)
+Links(g4) = pred_AST_links
 
 make_coverage_plot = function(region,
                               distance = 5000,
@@ -133,7 +136,7 @@ make_coverage_plot = function(region,
     region = glue("{chr}-{start}-{end}"),
     annotation = TRUE,
     show.bulk = TRUE,
-    group.by = "MOL_status",
+    group.by = "AST_status",
     ranges.title = region,
     ranges = li_enh,
     height.tracks = 20
@@ -158,131 +161,50 @@ make_coverage_plot = function(region,
   return(print(p))
 }
 
-#lapply(MOL_spec_enh_regions, make_coverage_plot)
+make_coverage_plot_all = function(region,
+                                  distance = 5000) {
+  
+  g4 = readRDS(file = "../results/Seurat/callpeaks_GFPsorted/GFPsorted.Rds")
+  g4@meta.data = g4@meta.data %>%
+    mutate(rownames_to_column(., var = "cell_id")) %>%
+    mutate(AST_status = ifelse(cell_id %in% barcodes_scbridge, "AST", "non-AST"))
+  
+  pred_AST_links = ConnectionsToLinks(conns = AST, ccans = AST_ccan)
+  Links(g4) = pred_AST_links
+  AST_example = make_coverage_plot(region = region, seurat_object = g4)
+  
+  g4 = readRDS(file = "../results/Seurat/callpeaks_GFPsorted/GFPsorted.Rds")
+  g4@meta.data = g4@meta.data %>%
+    mutate(rownames_to_column(., var = "cell_id")) %>%
+    mutate(AST_status = ifelse(cell_id %in% barcodes_scbridge, "AST", "non-AST"))
+  pred_nonAST_links = ConnectionsToLinks(conns = nonAST, ccans = nonAST_ccan)
+  Links(g4) = pred_nonAST_links
+  nonAST_example = make_coverage_plot(region = region, seurat_object = g4)
+  
+  plots = ggarrange(
+    plotlist = list(nonAST_example, AST_example),
+    ncol = 2,
+    nrow = 1
+  )
+  
+  ggsave(
+    glue("{result_folder}{region}_cicero_arranged_covplots.pdf"),
+    plot = plots,
+    width = 12,
+    height = 8,
+    device = "pdf"
+  )
+  
+}
 
-pred_nonmol_links = ConnectionsToLinks(conns = nonMOL, ccans = nonMOL_ccan)
-Links(g4) = pred_nonmol_links
-lapply(MOL_spec_enh_regions, make_coverage_plot)
+selected_enhs = sample(AST_spec_enh_regions, 50)
+lapply(selected_enhs, make_coverage_plot)
+pred_AST_links = ConnectionsToLinks(conns = AST, ccans = AST_ccan)
+Links(g4) = pred_AST_links
+lapply(selected_enhs, make_coverage_plot)
 
-# examples (cherry picking)
-# Pth1r
-pred_mol_links = ConnectionsToLinks(conns = MOL, ccans = MOL_ccan)
-Links(g4) = pred_mol_links
+# make ggarrange CoveragePlots
+lapply(selected_enhs, make_coverage_plot_all)
 
-mol_pth1r = make_coverage_plot(region = "chr9-110716521-110759131")
 
-pred_nonmol_links = ConnectionsToLinks(conns = nonMOL, ccans = nonMOL_ccan)
-Links(g4) = pred_nonmol_links
 
-nonmol_pth1r = make_coverage_plot(region = "chr9-110716521-110759131")
-
-pth1r_plots = ggarrange(
-  plotlist = list(nonmol_pth1r, mol_pth1r),
-  ncol = 2,
-  nrow = 1
-)
-
-ggsave(
-  glue("{result_folder}Pth1r_cicero_covplots.pdf"),
-  plot = pth1r_plots,
-  width = 12,
-  height = 8,
-  device = "pdf"
-)
-
-#
-pred_mol_links = ConnectionsToLinks(conns = MOL, ccans = MOL_ccan)
-Links(g4) = pred_mol_links
-mol_vw1 = make_coverage_plot(region = "chr6-125602999-125605170")
-
-pred_nonmol_links = ConnectionsToLinks(conns = nonMOL, ccans = nonMOL_ccan)
-Links(g4) = pred_nonmol_links
-nonmol_vw1 = make_coverage_plot(region = "chr6-125602999-125605170")
-
-vw1_plots = ggarrange(
-  plotlist = list(nonmol_vw1, mol_vw1),
-  ncol = 2,
-  nrow = 1
-)
-
-ggsave(
-  glue("{result_folder}Vw1_cicero_covplots.pdf"),
-  plot = vw1_plots,
-  width = 12,
-  height = 8,
-  device = "pdf"
-)
-
-#
-pred_mol_links = ConnectionsToLinks(conns = MOL, ccans = MOL_ccan)
-Links(g4) = pred_mol_links
-mol_elavl2 = make_coverage_plot(region = "chr4-91376129-91625283")
-
-pred_nonmol_links = ConnectionsToLinks(conns = nonMOL, ccans = nonMOL_ccan)
-Links(g4) = pred_nonmol_links
-nonmol_elavl2 = make_coverage_plot(region = "chr4-91376129-91625283")
-
-elavl2_plots = ggarrange(
-  plotlist = list(nonmol_elavl2, mol_elavl2),
-  ncol = 2,
-  nrow = 1
-)
-
-ggsave(
-  glue("{result_folder}Elavl2_cicero_covplots.pdf"),
-  plot = elavl2_plots,
-  width = 12,
-  height = 8,
-  device = "pdf"
-)
-
-# chr19
-pred_mol_links = ConnectionsToLinks(conns = MOL, ccans = MOL_ccan)
-Links(g4) = pred_mol_links
-mol_chr19 = make_coverage_plot(region = "chr19-8897652-8993498")
-
-pred_nonmol_links = ConnectionsToLinks(conns = nonMOL, ccans = nonMOL_ccan)
-Links(g4) = pred_nonmol_links
-nonmol_chr19 = make_coverage_plot(region = "chr19-8897652-8993498")
-
-chr19_plots = ggarrange(
-  plotlist = list(nonmol_chr19, mol_chr19),
-  ncol = 2,
-  nrow = 1
-)
-
-#
-pred_mol_links = ConnectionsToLinks(conns = MOL, ccans = MOL_ccan)
-Links(g4) = pred_mol_links
-mol_wdr7 = make_coverage_plot(region = "chr18-63764748-63771732")
-
-pred_nonmol_links = ConnectionsToLinks(conns = nonMOL, ccans = nonMOL_ccan)
-Links(g4) = pred_nonmol_links
-nonmol_wdr7 = make_coverage_plot(region = "chr18-63764748-63771732")
-
-wdr7_plots = ggarrange(
-  plotlist = list(nonmol_wdr7, mol_wdr7),
-  ncol = 2,
-  nrow = 1
-)
-
-ggsave(
-  glue("{result_folder}Wdr7_cicero_covplots.pdf"),
-  plot = wdr7_plots,
-  width = 12,
-  height = 8,
-  device = "pdf"
-)
-
-CoveragePlot(object = g4,
-             region = "chr9-110711875-110712480")
-CoveragePlot(
-  seurat_object,
-  region = "chr9-110711875-110712480",
-  ranges = li_enh,
-  annotation = TRUE,
-  show.bulk = TRUE,
-  group.by = "MOL_status",
-  ranges.title = region,
-  height.tracks = 20
-)

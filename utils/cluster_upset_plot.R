@@ -61,11 +61,11 @@ plot_freq_intersect <-
         aes(x = Group, y = n, label = n),
         vjust = -0.25,
         hjust = 0.5,
-        size = 3
+        size = 5
       ) +
       xlab("") + ylab("Number of regions") +
-      ggpubr::theme_pubclean() +
-      scale_fill_manual(name = .split, values = c("grey70", .color)) +
+      theme_classic() +
+      scale_fill_manual(name = .split, values = c("#636363", .color)) +
       theme(
         legend.position = "none",
         axis.text.x = element_blank(),
@@ -147,23 +147,6 @@ plot_freq_intersect <-
     )
   }
 
-# generate genomicrange object
-create_gr = function(input = "0_peaks_lanceotron.tsv", name = "0") {
-  input = fread(glue("{peak_folder}{input}"))
-  seqnames = unname(unlist(as.vector(input[,1])))
-  start = unname(unlist(as.vector(input[,2])))
-  end = unname(unlist(as.vector(input[,3])))
-  rownumber = nrow(input)
-  gr = GRanges(seqnames = seqnames,
-               ranges = IRanges(
-                 start = start,
-                 end = end,
-                 names = rep(name, rownumber)
-               ))
-  
-  return(gr)
-}
-
 overlap = function(peak_set1, peak_set2) {
   ol = peak_set1[queryHits(findOverlaps(
     peak_set1,
@@ -186,32 +169,24 @@ add_id = function(peak_set = peak0) {
 }
 
 # create input data frame for upset plot
-upset_input = function(peak_set) {
+upset_input = function(peak_set, bulk_set) {
   peak_set_t = as_tibble(peak_set)
   peak_set_t = peak_set_t %>% mutate(id = paste0(seqnames, "_", start, "_", end))
   
   # create ids for upset plot
   groups = paste0(as.numeric(
-    peak_set_t$id %in% overlap(peak_set1 = peak_set, peak_set2 = peak0)
+    peak_set_t$id %in% overlap(peak_set1 = peak_set, peak_set2 = cluster0)
   ),
   paste0(
     as.numeric(
-      peak_set_t$id %in% overlap(peak_set1 = peak_set, peak_set2 = peak1)
+      peak_set_t$id %in% overlap(peak_set1 = peak_set, peak_set2 = cluster1)
     ),
     paste0(
       as.numeric(
-        peak_set_t$id %in% overlap(peak_set1 = peak_set, peak_set2 = peak2)
-      ),
-      paste0(
-        as.numeric(
-          peak_set_t$id %in% overlap(peak_set1 = peak_set, peak_set2 = peak3)
-        ),
-        paste0(as.numeric(
-          peak_set_t$id %in% overlap(peak_set1 = peak_set, peak_set2 = peak4)
-        ))
+        peak_set_t$id %in% overlap(peak_set1 = peak_set, peak_set2 = bulk_set)
       )
-    )
-  ))
+      )
+    ))
   
   input = tibble(id = peak_set_t$id,
                  category = "",
@@ -221,82 +196,132 @@ upset_input = function(peak_set) {
   return(input)
 }
 
+# FindAllMarkers region
+# markers = fread("../results/Seurat/final/unsorted_brain/res0.1/outputs/FindAllMarkers_logreg_output.tsv")
+# cluster1 = markers %>% dplyr::filter(cluster == 1) %>% dplyr::select(chr, start, end) %>% 
+#   dplyr::select(V1 = chr, V2 = start, V3 = end)
+
 # Signac MACS2 peaks
-peak_list
-peak0 = create_gr(
-  input = "0_peaks.narrowPeak",
-  name = "0"
-)
-peak1 = create_gr(
-  input = "1_peaks.narrowPeak",
-  name = "1"
-)
-peak2 = create_gr(
-  input = "2_peaks.narrowPeak",
-  name = "2"
-)
-peak3 = create_gr(
-  input = "3_peaks.narrowPeak",
-  name = "3"
-)
-peak4 = create_gr(
-  input = "4_peaks.narrowPeak",
-  name = "4"
-)
-peak5 = create_gr(
-  input = "5_peaks.narrowPeak",
-  name = "5"
-)
-peak6 = create_gr(
-  input = "6_peaks.narrowPeak",
-  name = "6"
+cluster0 = fread("../results/Seurat/final/unsorted_brain/res0.1/cluster_spec_peaks/0_peaks.narrowPeak")
+cluster0$type = "cluster0"
+cluster0 = GRanges(
+  seqnames = cluster0$V1,
+  ranges = IRanges(
+    start = cluster0$V2,
+    end = cluster0$V3,
+    names = cluster0$type,
+  )
 )
 
-peak0$type = "cluster 0"
-peak1$type = "cluster 1"
-peak2$type = "cluster 2"
-peak3$type = "cluster 3"
-peak4$type = "cluster 4"
-peak5$type = "cluster 5"
-peak6$type = "cluster 6"
+
+cluster1 = fread("../results/Seurat/final/unsorted_brain/res0.1/cluster_spec_peaks/1_peaks.narrowPeak")
+cluster1$type = "cluster1"
+cluster1 = GRanges(
+  seqnames = cluster1$V1,
+  ranges = IRanges(
+    start = cluster1$V2,
+    end = cluster1$V3,
+    names = cluster1$type,
+  )
+)
+
+bulk_npc_peak = fread("../data/bed/bulk_CnT_G4_NPC_mm10.bed")
+bulk_npc_peak$type = "NPC_bulk_CnT"
+bulk_npc_peak = GRanges(
+  seqnames = bulk_npc_peak$V1,
+  ranges = IRanges(
+    start = bulk_npc_peak$V2,
+    end = bulk_npc_peak$V3,
+    names = bulk_npc_peak$type,
+  )
+)
+
+bulk_neuron_peak = fread("../data/bed/bulk_CnT_G4_neuron_mm10.bed")
+bulk_neuron_peak$type = "neuron_bulk_CnT"
+bulk_neuron_peak = GRanges(
+  seqnames = bulk_neuron_peak$V1,
+  ranges = IRanges(
+    start = bulk_neuron_peak$V2,
+    end = bulk_neuron_peak$V3,
+    names = bulk_neuron_peak$type,
+  )
+)
+
+cluster0$type = "cluster 0"
+cluster1$type = "cluster 1"
+bulk_npc_peak$type = "bulk npc"
+bulk_neuron_peak$type = "bulk neuron"
 
 # concatenate peak lists
-peak_all <-
-  GenomicRanges::reduce(c(peak0, peak1, peak2, peak3, peak4, peak5, peak6))
+peak_all =
+  GenomicRanges::reduce(c(bulk_npc_peak, cluster1, cluster0))
 
-# visualize overlaps by upset plot
-# input = upset_input(peak0)
-# plot_freq_intersect(input, .by = "group",
-#                     .levels = c("cluster 0", "cluster 1", "cluster 2", "cluster 3", "cluster 4"),
-#                     .split = "category", .color = "#2ca25f", top_n = 10)
-#
-# input = upset_input(peak1)
-# plot_freq_intersect(input, .by = "group",
-#                     .levels = c("cluster 0", "cluster 1", "cluster 2", "cluster 3", "cluster 4"),
-#                     .split = "category", .color = "#2ca25f", top_n = 10)
-
-input = upset_input(peak_all)
+input = upset_input(peak_all, bulk_set = bulk_npc_peak)
 upset_plot = plot_freq_intersect(
   input,
   .by = "group",
-  .levels = c("cluster 0", "cluster 1", "cluster 2", "cluster 3", "cluster 4", "cluster 5", "cluster 6"),
+  .levels = c("cluster 0", "cluster 1", "bulk NPC"),
   .split = "category",
-  .color = "#2ca25f",
+  .color = "#a1d99b",
   top_n = 10
 )
 upset_plot
 
 ggsave(
-  glue("{result_folder}upset_plot_cluster_peaks.png"),
+  glue("{result_folder}bulk_NPC-unsorted_brain_cluster0_1_upsetplot.png"),
   plot = upset_plot,
-  width = 10,
-  height = 10,
+  width = 6,
+  height = 6,
   dpi = 500,
 )
 ggsave(
-  glue("{result_folder}upset_plot_cluster_peaks.pdf"),
+  glue("{result_folder}bulk_NPC-unsorted_brain_cluster0_1_upsetplot.pdf"),
   plot = upset_plot,
-  width = 10,
-  height = 10,
+  width = 6,
+  height = 6,
   device = "pdf"
 )
+
+peak_all =
+  GenomicRanges::reduce(c(bulk_neuron_peak, cluster1, cluster0))
+input = upset_input(peak_all, bulk_set = bulk_neuron_peak)
+upset_plot = plot_freq_intersect(
+  input,
+  .by = "group",
+  .levels = c("cluster 0", "cluster 1", "bulk neuron"),
+  .split = "category",
+  .color = "#a1d99b",
+  top_n = 10
+)
+upset_plot
+
+# differentiate cluster0, and cluster1
+plot_euler(
+  list(cluster1, cluster0),
+  ignore.strand = TRUE,
+  fills = c("white", "#2ca25f"),
+  names = c("cluster 1", "cluster 0")
+)
+
+plot_euler(
+  list(bulk_neuron_peak, cluster1, cluster0),
+  ignore.strand = TRUE,
+  fills = c("white", "#bdbdbd", "#2ca25f"),
+  names = c("bulk neuron", "cluster 1", "cluster 0")
+)
+
+ggsave(
+  glue("{result_folder}bulk_neuron-unsorted_brain_cluster0_1_upsetplot.png"),
+  plot = upset_plot,
+  width = 6,
+  height = 6,
+  dpi = 500,
+)
+ggsave(
+  glue("{result_folder}bulk_neuron-unsorted_brain_cluster0_1_upsetplot.pdf"),
+  plot = upset_plot,
+  width = 6,
+  height = 6,
+  device = "pdf"
+)
+

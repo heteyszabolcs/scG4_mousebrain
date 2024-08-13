@@ -98,7 +98,7 @@ full = as.matrix(full)
 
 # visualize enrichments by heatmap
 generate_heatmap = function(matrix) {
-  col_fun = colorRamp2(c(1e-10, 1e-12, 1e-16, 1e-20, 1e-30), c("grey", "#ece7f2", "#3182bd", "#3182bd", "darkblue"))
+  col_fun = colorRamp2(c(1e-10, 1e-12, 1e-16, 1e-20, 1e-30), c("grey", "#ece7f2", "#e5f5f9", "#99d8c9", "#2ca25f"))
   hm = Heatmap(
     matrix,
     column_title = "",
@@ -185,7 +185,7 @@ full = as.matrix(full)
 full = full[which(rownames(full) != "biological_process"),]
 
 generate_heatmap = function(matrix) {
-  col_fun = colorRamp2(c(0.05, 1e-10, 1e-14, 1e-28, 1e-22), c("grey", "#ece7f2", "#3182bd", "#3182bd", "darkblue"))
+  col_fun = colorRamp2(c(0.05, 1e-10, 1e-14, 1e-28, 1e-22), c("grey", "#ece7f2", "#e5f5f9", "#99d8c9", "#2ca25f"))
   hm = Heatmap(
     matrix,
     column_title = "",
@@ -232,7 +232,7 @@ dev.off()
 
 # visualize enrichments by heatmap
 generate_heatmap = function(matrix) {
-  col_fun = colorRamp2(c(0.05,  0.025, 0.010, 0.005, 0.001), c("grey", "#ece7f2", "#ece7f2", "#ece7f2", "#3182bd"))
+  col_fun = colorRamp2(c(0.05,  0.025, 0.010, 0.005, 0.001), c("grey", "#ece7f2", "#e5f5f9", "#99d8c9", "#2ca25f"))
   hm = Heatmap(
     matrix,
     column_title = "",

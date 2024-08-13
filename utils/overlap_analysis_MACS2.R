@@ -43,7 +43,7 @@ cluster1 = GRanges(
   )
 )
 
-bulk_mesc_peak = fread("../data/bed/bulk_CnT_G4_mES_mm10.bed")
+bulk_mesc_peak = fread("../data/bed/bulk_G4_CnT_mESC_rep1_R1.mLb.clN_peaks.broadPeak")
 bulk_mesc_peak$type = "mESC_bulk_CnT"
 bulk_mesc_peak = GRanges(
   seqnames = bulk_mesc_peak$V1,
@@ -311,6 +311,21 @@ v <- venn_cnt2venn(res$vennCounts)
 print(plot(v, doWeights = FALSE))
 dev.off()
 
+gr = c(cluster0_unsorted, cluster1_unsorted)
+grl = splitAsList(gr, gr$type)
+grl = unique(grl)
+
+res = makeVennDiagram(Peaks = grl, NameOfPeaks = names(grl))
+
+# cluster 1 & 0 overlap
+venn_cnt2venn <- function(venn_cnt) {
+  n <- which(colnames(venn_cnt) == "Counts") - 1
+  SetNames = colnames(venn_cnt)[1:n]
+  Weight = venn_cnt[, "Counts"]
+  names(Weight) <- apply(venn_cnt[, 1:n], 1, paste, collapse = "")
+  Venn(SetNames = SetNames, Weight = Weight)
+}
+
 ## NPC - neuron - brain G4 scCut&Tag Jaccard analysis
 # jaccard indices (package cotools) and GenometriCorrelation analysis (package GenometriCorr)
 peaks = list(cluster0_unsorted, cluster1_unsorted, bulk_neuron_peak, bulk_npc_peak)
@@ -399,7 +414,8 @@ all = GRanges(
 )
 
 # unique cluster 0
-read_cov = bw_loci(glue(bigwigs, "0.bam_RPGC.bigwig"), glue(bigwigs, "1.bam_RPGC.bigwig") , loci = all)
+read_cov = bw_loci(glue(bigwigs, "0.bam_RPGC.bigwig"), glue(bigwigs, "1.bam_RPGC.bigwig"), 
+                   loci = all, )
 read_cov = as.data.frame(read_cov)
 read_cov = inner_join(read_cov, as.data.frame(all), by = c("seqnames", "start", "end"))
 
@@ -461,6 +477,22 @@ write.table(
   row.names = FALSE,
   col.names = FALSE
 )
+
+# with GenomicRanges
+cluster0_unique = cluster0_gr[-queryHits(findOverlaps(cluster0_gr, cluster1_gr, type="any")),]
+cluster0_unique = as.data.frame(cluster0_unique)
+cluster0_unique = cluster0_unique[which
+                                  (cluster0_unique$signalValue > median(cluster0_unique$signalValue)),]
+cluster0_unique %>% dplyr::select(seqnames, start, end) %>% 
+  write_tsv(., glue("{bed_output}unique_cluster0-median_filtered-GR.bed"), col_names = FALSE)
+
+cluster1_unique = cluster1_gr[-queryHits(findOverlaps(cluster1_gr, cluster0_gr, type="any")),]
+cluster1_unique = as.data.frame(cluster1_unique)
+cluster1_unique = cluster1_unique[which
+                                  (cluster1_unique$signalValue > median(cluster1_unique$signalValue)),]
+cluster1_unique %>% dplyr::select(seqnames, start, end) %>% 
+  write_tsv(., glue("{bed_output}unique_cluster1-median_filtered-GR.bed"), col_names = FALSE)
+
 
 # unsorted scCut&Tag reso 0.8
 peak_set = "../results/Seurat/final/unsorted_brain/res0.8/cluster_spec_peaks/"

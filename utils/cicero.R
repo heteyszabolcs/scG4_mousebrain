@@ -5,12 +5,16 @@ suppressMessages({
   library("ggplot2")
   library("monocle3")
   library("data.table")
+  library("tidyverse")
+  library("glue")
 })
 
+# if 'make_cicero_cds' function is not working:
+# install monocle3 again with the line below BEFORE loading packages:
 #devtools::install_github("cole-trapnell-lab/cicero-release", ref = "monocle3")
 set.seed(42)
 
-# if 'make_cicero_cds' function is not working:
+
 # cicero: https://www.bioconductor.org/packages/release/bioc/vignettes/cicero/inst/doc/website.html
 # implementation: https://github.com/Castelo-Branco-lab/scCut-Tag_2020/blob/master/notebooks/H3K27ac/Cicero.Rmd
 
@@ -72,15 +76,15 @@ g4 = readRDS(file = "../results/Seurat/callpeaks_GFPsorted/GFPsorted.Rds")
 
 # scBridge outputs
 pred = fread("../results/scBridge/output/scbridge_predictions.csv", header = TRUE)
-barcodes_scbridge = pred %>% filter(Prediction == "MOL") %>% pull(V1)
+barcodes_scbridge = pred %>% filter(Prediction == "Astrocytes") %>% pull(V1)
 other = setdiff(colnames(g4@assays$GA@counts), barcodes_scbridge)
 
 g4@meta.data = g4@meta.data %>% 
   mutate(rownames_to_column(., var = "cell_id")) %>% 
-  mutate(MOL_status = ifelse(cell_id %in% barcodes_scbridge, "MOL", "non-MOL"))
+  mutate(MOL_status = ifelse(cell_id %in% barcodes_scbridge, "AST", "non-AST"))
 
-g4_pred_mol = subset(g4, cells = barcodes_scbridge)
-g4_pred_nonmol = subset(g4, cells = other)
+g4_pred_ast = subset(g4, cells = barcodes_scbridge)
+g4_pred_nonast = subset(g4, cells = other)
 
 # helper function
 cicero_function = function(seurat_object, label, output_path) {
@@ -120,23 +124,23 @@ cicero_function = function(seurat_object, label, output_path) {
   return(CCAN_assigns)
 }
 
-# cicero on MOL predictions
-pred_mol = cicero_function(seurat_object = g4_pred_mol, label = "predMOL", 
+# cicero on AST predictions
+pred_ast = cicero_function(seurat_object = g4_pred_ast, label = "predAST", 
                            output_path = "../results/Seurat/callpeaks_GFPsorted/")
 
-load(file = "../results/Seurat/callpeaks_GFPsorted/sorted_cicero-predMOL.Rds")
-pred_mol_links = ConnectionsToLinks(conns = conns, ccans = pred_mol)
+load(file = "../results/Seurat/callpeaks_GFPsorted/sorted_cicero-predAST.Rds")
+pred_ast_links = ConnectionsToLinks(conns = conns, ccans = pred_mol)
 Links(g4) = pred_mol_links
 
-pred_nonmol = cicero_function(seurat_object = g4_pred_nonmol, label = "pred_nonMOL",
+pred_nonast = cicero_function(seurat_object = g4_pred_nonast, label = "pred_nonAST",
                               output_path = "../results/Seurat/callpeaks_GFPsorted/")
 
 
 
-CoveragePlot(g4, region = "chr4-39340342-39349928", annotation = TRUE,
-             show.bulk = TRUE, group.by = "MOL_status")
-CoveragePlot(g4, region = "chr17-39838143-39851630", annotation = TRUE,
-             show.bulk = TRUE, group.by = "MOL_status")
+# CoveragePlot(g4, region = "chr4-39340342-39349928", annotation = TRUE,
+#              show.bulk = TRUE, group.by = "MOL_status")
+# CoveragePlot(g4, region = "chr17-39838143-39851630", annotation = TRUE,
+#              show.bulk = TRUE, group.by = "MOL_status")
 
 
 
