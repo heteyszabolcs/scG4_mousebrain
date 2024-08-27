@@ -49,7 +49,7 @@ cicero_cds = make_cicero_cds(input_cds, reduced_coordinates = umap_coords)
 conns = run_cicero(cicero_cds, mm10.chromsize)
 save(conns, file = "../results/Seurat/callpeaks_GFPsorted/sorted_cicero.Rds")
 
-# finding cis-Coaccessibility networks (CCANS), coaccess_cutoff_override > 0.5 strict
+# finding cis-Coaccessibility networks (CCANS), coaccess_cutoff_override > 0.1 strict
 CCAN_assigns = generate_ccans(conns, coaccess_cutoff_override = 0.1)
 save(CCAN_assigns, file = "../results/Seurat/callpeaks_sorted/sorted_cicero_coG4networks.Rds")
 
@@ -81,7 +81,7 @@ other = setdiff(colnames(g4@assays$GA@counts), barcodes_scbridge)
 
 g4@meta.data = g4@meta.data %>% 
   mutate(rownames_to_column(., var = "cell_id")) %>% 
-  mutate(MOL_status = ifelse(cell_id %in% barcodes_scbridge, "AST", "non-AST"))
+  mutate(AST_status = ifelse(cell_id %in% barcodes_scbridge, "AST", "non-AST"))
 
 g4_pred_ast = subset(g4, cells = barcodes_scbridge)
 g4_pred_nonast = subset(g4, cells = other)
@@ -138,9 +138,9 @@ pred_nonast = cicero_function(seurat_object = g4_pred_nonast, label = "pred_nonA
 
 
 # CoveragePlot(g4, region = "chr4-39340342-39349928", annotation = TRUE,
-#              show.bulk = TRUE, group.by = "MOL_status")
+#              show.bulk = TRUE, group.by = "AST_status")
 # CoveragePlot(g4, region = "chr17-39838143-39851630", annotation = TRUE,
-#              show.bulk = TRUE, group.by = "MOL_status")
+#              show.bulk = TRUE, group.by = "AST_status")
 
 
 

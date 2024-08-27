@@ -206,5 +206,6 @@ lapply(selected_enhs, make_coverage_plot)
 # make ggarrange CoveragePlots
 lapply(selected_enhs, make_coverage_plot_all)
 
+make_coverage_plot_all(region = "chr8-72510827-72852021")
 
 

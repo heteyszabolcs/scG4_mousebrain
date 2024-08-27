@@ -21,6 +21,10 @@ meta = seurat@meta.data
 rel = fread("../results/scBridge/output/scbridge_reliability.csv")
 pred = fread("../results/scBridge/output/scbridge_predictions.csv", header = TRUE)
 
+meta = meta %>% rownames_to_column(., var = "cell_id")
+meta = meta %>% inner_join(., pred, by = c("cell_id" = "V1")) %>% 
+  dplyr::rename(scBridge_prediction = Prediction)
+
 # t1: table with 2 columns: coembed labels, raw labels
 # t2: table with 2 columns: coembed labels, raw labels
 cal_ovlpScore <- function(t1, t2){
@@ -149,3 +153,52 @@ hm2
 dev.off()
 
 hm + hm2
+
+# Seurat - scBridge overlap 
+meta = meta %>% dplyr::filter(scBridge_prediction != "Novel (Most Unreliable)") %>% 
+  dplyr::filter(pred_max_score > 0.5) %>% 
+  mutate(scBridge_prediction = str_replace_all(scBridge_prediction, pattern = "Astrocytes", replacement = "AST")) %>% 
+  mutate(scBridge_prediction = str_replace_all(scBridge_prediction, pattern = "Oligodendrocytes", replacement = "MOL")) %>% 
+  mutate(pred_cell_type = str_replace_all(pred_cell_type, pattern = "Astrocytes", replacement = "AST")) %>% 
+  mutate(pred_cell_type = str_replace_all(pred_cell_type, pattern = "Oligodendrocytes", replacement = "MOL"))
+
+ident2seurat = data.frame(idents = rownames(meta), rna_label = meta$pred_cell_type)
+ident2seurat = ident2seurat[complete.cases(ident2seurat), ]
+
+ident2sc_br = data.frame(idents = rownames(meta), rna_label = meta$scBridge_prediction)
+ident2sc_br = ident2sc_br[complete.cases(ident2sc_br), ]
+
+ovlpScore.df = cal_ovlpScore(ident2seurat, ident2sc_br)
+
+mapSubclass = ovlpScore.df
+colnames(mapSubclass) <- c("cell_type", "seurat_cluster", "ovlpScore")
+mapSubclass = dcast(mapSubclass, cell_type~seurat_cluster, value.var = "ovlpScore", 
+                    fun.aggregate = identity, fill = 0)
+rows = mapSubclass$cell_type
+mapSubclass = mapSubclass[,-1]
+rownames(mapSubclass) = rows
+
+pdf(
+  file = "../results/Seurat/scBridge_Seurat_overlap_score_hm.pdf",
+  width = 5,
+  height = 5
+)
+hm3 = Heatmap(
+  mapSubclass,
+  name = "overlap score",
+  clustering_distance_rows = "pearson",
+  col = col_fun,
+  row_title = "Seurat prediction (pred. score > 0.5)",
+  row_title_side = "right",
+  column_title = "scBridge prediction",
+  column_title_side = "bottom",
+  show_row_names = TRUE,
+  rect_gp = gpar(col = "black", lwd = 1),
+  cluster_columns = FALSE,
+  cluster_rows = FALSE,
+  width = unit(7, "cm"),
+  height = unit(3, "cm"),
+  column_names_rot = 90
+)
+hm3
+dev.off()

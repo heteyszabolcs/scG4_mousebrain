@@ -29,11 +29,27 @@ comb = as.Seurat(comb, counts = "X", data = NULL)
 
 scbr_rna@meta.data = scbr_rna@meta.data %>% 
   mutate(CellType = str_replace_all(CellType, pattern = "Astrocytes", replacement = "AST")) %>% 
-  mutate(CellType = str_replace_all(CellType, pattern = "Oligodendrocytes", replacement = "AST"))
+  mutate(CellType = str_replace_all(CellType, pattern = "Oligodendrocytes", replacement = "MOL"))
 
 scbr_g4@meta.data = scbr_g4@meta.data %>% 
   mutate(Prediction = str_replace_all(Prediction, pattern = "Astrocytes", replacement = "AST")) %>% 
   mutate(Prediction = str_replace_all(Prediction, pattern = "Oligodendrocytes", replacement = "MOL"))
+
+glue(
+  "number of AST: {as.character(scbr_g4@meta.data %>% dplyr::filter(Prediction == 'AST') %>% rownames %>% length)}
+     number of non-AST: {as.character(scbr_g4@meta.data %>% dplyr::filter(Prediction != 'AST') %>% rownames %>% length)}"
+)
+
+glue(
+  "Av. reliability of AST: {as.character(scbr_g4@meta.data %>% dplyr::filter(Prediction == 'AST') %>% pull('Reliability') %>% 
+  mean %>% round(2))}"
+)
+
+glue(
+  "# of reliable cells: {as.character(scbr_g4@meta.data %>% dplyr::filter(Reliability > 0.9) %>% rownames %>% 
+  length)} 
+  # of all cells: {as.character(dim(scbr_g4@meta.data)[1])}"
+)
 
 # Seurat UMAPs
 set3 = brewer.pal(8, "Set3")
@@ -182,7 +198,7 @@ cols = c(
   "non-AST" = '#f0f0f0',
   "AST" = "#de2d26")
 
-mol = DimPlot(
+ast = DimPlot(
   object = scbr_g4,
   group.by = "AST_status",
   label = FALSE,
@@ -204,11 +220,11 @@ mol = DimPlot(
     axis.text.x = element_text(size = 25, color = "black"),
     axis.text.y = element_text(size = 25, color = "black")
   )
-mol
+ast
 
 ggsave(
   glue("{result_folder}Seurat_predAST-UMAP.pdf"),
-  plot = mol,
+  plot = ast,
   width = 8,
   height = 8,
   device = "pdf"
@@ -231,6 +247,7 @@ domain = DimPlot(
   label.size = 7,
   repel = TRUE,
   raster = TRUE,
+  alpha = 0.1
 ) +
   xlim(-12, 25) +
   ylim(-20, 20) +
@@ -333,13 +350,13 @@ rel = fread("../results/scBridge/output/scbridge_reliability.csv")
 pred = fread("../results/scBridge/output/scbridge_predictions.csv", header = TRUE)
 
 meta = g4@meta.data %>% 
-  left_join(., rel, c("cell_id" = "V1")) %>% rename(scBridge_reliability = "Reliability") %>% 
-  left_join(., pred, c("cell_id" = "V1")) %>% rename(scBridge_prediction = "Prediction")
+  left_join(., rel, c("cell_id" = "V1")) %>% dplyr::rename(scBridge_reliability = "Reliability") %>% 
+  left_join(., pred, c("cell_id" = "V1")) %>% dplyr::rename(scBridge_prediction = "Prediction")
 
 rownames(meta) = rownames(g4@meta.data) 
 g4@meta.data = meta
 
-both_preds_mol = meta %>% filter(scBridge_prediction == "AST" & pred_cell_type == "AST")
+both_preds_ast = meta %>% filter(scBridge_prediction == "AST" & pred_cell_type == "AST")
 
 cor(g4@meta.data$pred_max_score, g4@meta.data$scBridge_reliability, method = "spearman")
 ggplot(g4@meta.data, aes(x = scBridge_reliability, y = pred_max_score, color = scBridge_prediction)) +

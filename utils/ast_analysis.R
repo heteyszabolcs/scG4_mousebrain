@@ -25,7 +25,7 @@ result_folder = "../results/Seurat/"
 source("C:/Szabolcs/Karolinska/Data/scripts/get_unique_peaks_ws.R")
 source("C:/Szabolcs/Karolinska/Data/scripts/annotation.R")
 
-# MOL markers
+# markers
 markers = read_tsv("../results/Seurat/final/sorted_brain/res0.8/integration/outputs/scRNA-Seq-FindAllMarkers_output.tsv")
 markers = markers[markers$p_val < 0.05 &
                         markers$avg_log2FC > 0.5, ]
@@ -57,7 +57,7 @@ ids = rownames(pred_score)
 pred_score = as_tibble(pred_score)
 colnames(pred_score) = c("OEC","AST","MOL","Pericytes","VEC","VLMC","COP-NFOL","OPC","max")
 pred_score = pred_score %>% 
-  dplyr::select(-max) %>% mutate(cell_id = ids) %>% dplyr::filter(MOL > 0.50)
+  dplyr::select(-max) %>% mutate(cell_id = ids) %>% dplyr::filter(AST > 0.90)
 ast_ids = pred_score %>% pull(cell_id)
 
 ast_markers = markers %>% 
@@ -67,14 +67,6 @@ ast_markers = markers %>%
   top_n(500, wt = avg_log2FC)
 all_ast_markers = ast_markers$gene
 ast_markers = unique(ast_markers$gene)[1:20]
-
-opc_markers = markers %>% 
-  mutate(cluster = ifelse(str_detect(markers$cluster, "OPC"), "OPC", cluster)) %>% 
-  mutate(cluster = ifelse(str_detect(markers$cluster, "NFOL"), "NFOL", cluster)) %>% 
-  dplyr::filter(str_detect(cluster, "OPC")) %>% 
-  arrange(desc(avg_log2FC)) %>% 
-  top_n(100, wt = avg_log2FC)
-opc_markers = unique(opc_markers$gene)[1:20]
 
 # Seurat objects
 sorted = readRDS(file = "../results/Seurat/final/sorted_brain/res0.1/outputs/Seurat_object.Rds")
@@ -88,7 +80,7 @@ g4_counts = as.matrix(sorted@assays$GA@data)
 peaks = as.matrix(sorted@assays$peaks@data)
 
 # highly predicted MOL cell ids
-barcodes_seurat = pred_score$cell_id[which(pred_score$AST > 0.50)]
+barcodes_seurat = pred_score$cell_id[which(pred_score$AST > 0.90)]
 barcodes_scbridge = pred %>% filter(Prediction == "AST") %>% pull(V1)
 barcodes_scbridge_others = pred %>% filter(Prediction != "AST") %>% 
   filter(Prediction != "Novel (Most Unreliable)") %>% 
@@ -1117,6 +1109,11 @@ ggsave(
   device = "pdf"
 )
 
+glue("sign. down: {as.character(
+     volc_input %>% dplyr::filter(group == 'down') %>% rownames %>% length)}
+     sign. up: {as.character(
+     volc_input %>% dplyr::filter(group == 'up') %>% rownames %>% length)}")
+
 # volcano plot
 volc_input = diff_AST_vs_nonAST_scBr %>% 
   mutate(gene_name = rownames(.)) 
@@ -1137,6 +1134,11 @@ cols = c("up" = "#fc9272", "down" = "#a1d99b", "unaltered" = "grey")
 sizes = c("up" = 4, "down" = 4, "unaltered" = 2)
 alphas = c("up" = 1, "down" = 1, "unaltered" = 0.5)
 
+glue("sign. down: {as.character(
+     volc_input %>% dplyr::filter(group == 'down') %>% rownames %>% length)}
+     sign. up: {as.character(
+     volc_input %>% dplyr::filter(group == 'up') %>% rownames %>% length)}")
+     
 # plot
 ggplot_volc = volc_input %>%
   ggplot(aes(x = avg_log2FC,
