@@ -21,5 +21,5 @@ multiBigwigSummary bins -b ../data/Marek_data/mESC-MEF/cluster_0.bw \
  --BED ../data/Marek_data/mESC-MEF/regions.bed \
  -o ../results/deeptools/multibwsumm_results.npz
 
-plotCorrelation -in ../results/deeptools/multibwsumm_results.npz --corMethod pearson --skipZeros  --whatToPlot heatmap -o ../results/deeptools/heatmap__PearsonCorr_bigwigScores.png --outFileCorMatrix ../results/deeptools/PearsonCorr_bigwigScores.tab
+plotCorrelation -in ../results/deeptools/multibwsumm_results.npz --corMethod pearson --skipZeros  --whatToPlot heatmap -o ../results/deeptools/heatmap_PearsonCorr_bigwigScores.png --outFileCorMatrix ../results/deeptools/PearsonCorr_bigwigScores.tab
 
