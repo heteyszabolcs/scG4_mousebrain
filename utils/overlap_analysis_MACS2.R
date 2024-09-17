@@ -18,19 +18,22 @@ suppressPackageStartupMessages({
   library("bedscout")
 })
 
-# canonical PQS sites
+### various PQS sites
+# canonical
 can_pqs = "../data/bed/mm10_canonical_G4_PQS-regex.bed"
 can_pqs = rtracklayer::import(can_pqs)
 
+# longer linkers
 longer_pqs = "../data/bed/mm10_all_with_one_long_linkers_PQS-regex.bed"
 longer_pqs = rtracklayer::import(longer_pqs)
 
+# swapped
 swaped_pqs = "../data/bed/mm10_all_with_strand_swaps_PQS-regex.bed"
 swaped_pqs = rtracklayer::import(swaped_pqs)
 
 all_pqs = c(can_pqs, longer_pqs, swaped_pqs)
 
-## Venn-diagrams
+## mESC-MEF scCut&Tag ###
 # Venn with 3 sets - bulk mESC and cluster0/1 of mESC-MEF scCnT
 result_folder = "../results/GenomicRanges/mESC-MEF_outputs/"
 
@@ -57,7 +60,7 @@ cluster1 = GRanges(
 )
 
 plot_euler(
-  list(pqs, cluster1),
+  list(can_pqs, cluster1),
   ignore.strand = TRUE,
   fills = c("#deebf7", "#9ecae1"),
   names = c("PQS", "1")
@@ -75,7 +78,7 @@ bulk_mesc_peak = GRanges(
 )
 
 plot_euler(
-  list(pqs, bulk_mesc_peak),
+  list(can_pqs, bulk_mesc_peak),
   ignore.strand = TRUE,
   fills = c("#deebf7", "#9ecae1"),
   names = c("PQS", "bulk mESC")
@@ -169,25 +172,23 @@ v <- venn_cnt2venn(res$vennCounts)
 print(plot(v, doWeights = FALSE))
 dev.off()
 
-## mESC - MEF - G4 scCut&Tag Jaccard analysis
+## mESC-MEF Jaccard analysis
 # jaccard indices (package cotools) and GenometriCorrelation analysis (package GenometriCorr)
 peaks = list(cluster0, cluster1, bulk_mesc_peak, bulk_mef_peak)
 jaccards = matrix(NA_real_, length(peaks), length(peaks))
 colnames(jaccards) = c("cluster 0", "cluster 1", "bulk mESC CnT", "bulk MEF CnT")
 rownames(jaccards) = c("cluster 0", "cluster 1", "bulk mESC CnT", "bulk MEF CnT")
-for(i in seq(1, ncol(jaccards))) {
-  for(j in seq(1, nrow(jaccards))) {
+for (i in seq(1, ncol(jaccards))) {
+  for (j in seq(1, nrow(jaccards))) {
     jaccard = genomicCorr.jaccard(peaks[[i]], peaks[[j]])
     jaccards[i, j] = jaccard
   }
 }
 is.matrix(jaccards)
 
-pdf(
-  file = "../results/GenomicRanges/mESC-MEF_outputs/mESC_MEF_res0.1_Jaccard_hm.pdf",
-  width = 6,
-  height = 6
-)
+pdf(file = "../results/GenomicRanges/mESC-MEF_outputs/mESC_MEF_res0.1_Jaccard_hm.pdf",
+    width = 6,
+    height = 6)
 col_fun = colorRamp2(c(0, 0.25, 0.5), c("#9ecae1", "white", "#fc9272"))
 Heatmap(
   jaccards,
@@ -210,14 +211,128 @@ Heatmap(
   column_names_gp = gpar(fontsize = 10),
   column_names_rot = 90,
   cell_fun = function(j, i, x, y, width, height, fill) {
-    grid.text(sprintf("%.2f", jaccards[i, j]), x, y, gp = gpar(fontsize = 10))}
+    grid.text(sprintf("%.2f", jaccards[i, j]), x, y, gp = gpar(fontsize = 10))
+  }
 )
 dev.off()
 
+## generate bed files from overlap analysis for deeptools heatmaps
+bed_output = "../results/GenomicRanges/mESC-MEF_outputs/bulk_overlaps/"
+peak_set = "../results/Seurat/final/mesc_mef/cluster_spec_peaks/"
+bigwigs = "../results/Seurat/final/mesc_mef/cluster_spec_bigwigs/"
+
+cluster0 = fread(glue("{peak_set}0_peaks.narrowPeak"))
+cluster0_gr = GRanges(
+  seqnames = cluster0$V1,
+  ranges = IRanges(
+    start = cluster0$V2,
+    end = cluster0$V3,
+    signalValue = cluster0$V7
+  )
+)
+
+cluster1 = fread(glue("{peak_set}1_peaks.narrowPeak"))
+cluster1_gr = GRanges(
+  seqnames = cluster1$V1,
+  ranges = IRanges(
+    start = cluster1$V2,
+    end = cluster1$V3,
+    signalValue = cluster1$V7
+  )
+)
+
+all = rbind(cluster0, cluster1)
+all = all %>% mutate(type = "unsorted")
+
+all = GRanges(
+  seqnames = all$V1,
+  ranges = IRanges(
+    start = all$V2,
+    end = all$V3,
+    signalValue = all$V7
+  )
+)
+
+# unique cluster 0
+read_cov = bw_loci(glue(bigwigs, "0.bam_RPGC.bigwig"),
+                   glue(bigwigs, "1.bam_RPGC.bigwig") ,
+                   loci = all)
+read_cov = as.data.frame(read_cov)
+read_cov = inner_join(read_cov, as.data.frame(all), by = c("seqnames", "start", "end"))
+
+only_cluster0 = read_cov %>% dplyr::filter(!X0.bam_RPGC == Inf) %>%
+  dplyr::filter(X0.bam_RPGC >= 4) %>%
+  dplyr::select(seqnames, start, end, signalValue)
+
+write_tsv(only_cluster0,
+          glue("{bed_output}cluster0_unique_peaks_res0.1.tsv"))
+
+only_cluster0 = only_cluster0 %>% dplyr::select(seqnames, start, end)
+
+write.table(
+  only_cluster0,
+  glue("{bed_output}MACS2_cl0_only.bed"),
+  quote = FALSE,
+  sep = "\t",
+  row.names = FALSE,
+  col.names = FALSE
+)
+
+# unique cluster 1
+read_cov = bw_loci(glue(bigwigs, "1.bam_RPGC.bigwig"),
+                   glue(bigwigs, "0.bam_RPGC.bigwig") ,
+                   loci = all)
+read_cov = as.data.frame(read_cov)
+read_cov = inner_join(read_cov, as.data.frame(all), by = c("seqnames", "start", "end"))
+
+only_cluster1 = read_cov %>% dplyr::filter(!X1.bam_RPGC == Inf) %>%
+  dplyr::filter(X1.bam_RPGC >= 4) %>%
+  dplyr::select(seqnames, start, end, signalValue)
+
+write_tsv(only_cluster1,
+          glue("{bed_output}cluster1_unique_peaks_res0.1.tsv"))
+
+only_cluster1 = only_cluster1 %>% dplyr::select(seqnames, start, end)
+
+write.table(
+  only_cluster1,
+  glue("{bed_output}MACS2_cl1_only.bed"),
+  quote = FALSE,
+  sep = "\t",
+  row.names = FALSE,
+  col.names = FALSE
+)
+
+# both cluster 0,1
+ol = findOverlaps(cluster0_gr,
+                  cluster1_gr,
+                  type = "any",
+                  ignore.strand = FALSE)
+
+# intersection
+both = cluster0_gr[queryHits(ol)]
+both = data.frame(
+  seqnames = seqnames(both),
+  starts = start(both) - 1,
+  ends = end(both)
+)
+
+write.table(
+  both,
+  glue("{bed_output}MACS2_intersection.bed"),
+  quote = FALSE,
+  sep = "\t",
+  row.names = FALSE,
+  col.names = FALSE
+)
+
+### unsorted scCut&Tag ###
 # Venn with 3 sets - bulk NPC and cluster0/1 of unsorted scCnT
 result_folder = "../results/GenomicRanges/unsorted_outputs/"
 
-cluster0_unsorted = fread("../results/Seurat/final/unsorted_brain/res0.1/cluster_spec_peaks/0_peaks.narrowPeak")
+cluster0_unsorted = fread(
+  "../results/Seurat/final/unsorted_brain/res0.1/cluster_spec_peaks/0_peaks.narrowPeak"
+)
 cluster0_unsorted$type = "cluster0"
 cluster0_unsorted = GRanges(
   seqnames = cluster0_unsorted$V1,
@@ -228,7 +343,9 @@ cluster0_unsorted = GRanges(
   )
 )
 
-cluster1_unsorted = fread("../results/Seurat/final/unsorted_brain/res0.1/cluster_spec_peaks/1_peaks.narrowPeak")
+cluster1_unsorted = fread(
+  "../results/Seurat/final/unsorted_brain/res0.1/cluster_spec_peaks/1_peaks.narrowPeak"
+)
 cluster1_unsorted$type = "cluster1"
 cluster1_unsorted = GRanges(
   seqnames = cluster1_unsorted$V1,
@@ -278,7 +395,9 @@ print(plot(v, doWeights = FALSE))
 dev.off()
 
 # Venn with 3 sets - bulk neuron and cluster0/1 of unsorted scCnT
-cluster0_unsorted = fread("../results/Seurat/final/unsorted_brain/res0.1/cluster_spec_peaks/0_peaks.narrowPeak")
+cluster0_unsorted = fread(
+  "../results/Seurat/final/unsorted_brain/res0.1/cluster_spec_peaks/0_peaks.narrowPeak"
+)
 cluster0_unsorted$type = "cluster0"
 cluster0_unsorted = GRanges(
   seqnames = cluster0_unsorted$V1,
@@ -289,7 +408,9 @@ cluster0_unsorted = GRanges(
   )
 )
 
-cluster1_unsorted = fread("../results/Seurat/final/unsorted_brain/res0.1/cluster_spec_peaks/1_peaks.narrowPeak")
+cluster1_unsorted = fread(
+  "../results/Seurat/final/unsorted_brain/res0.1/cluster_spec_peaks/1_peaks.narrowPeak"
+)
 cluster1_unsorted$type = "cluster1"
 cluster1_unsorted = GRanges(
   seqnames = cluster1_unsorted$V1,
@@ -355,12 +476,15 @@ venn_cnt2venn <- function(venn_cnt) {
 
 ## NPC - neuron - brain G4 scCut&Tag Jaccard analysis
 # jaccard indices (package cotools) and GenometriCorrelation analysis (package GenometriCorr)
-peaks = list(cluster0_unsorted, cluster1_unsorted, bulk_neuron_peak, bulk_npc_peak)
+peaks = list(cluster0_unsorted,
+             cluster1_unsorted,
+             bulk_neuron_peak,
+             bulk_npc_peak)
 jaccards = matrix(NA_real_, length(peaks), length(peaks))
 colnames(jaccards) = c("cluster 0", "cluster 1", "bulk neuron CnT", "bulk NPC CnT")
 rownames(jaccards) = c("cluster 0", "cluster 1", "bulk neuron CnT", "bulk NPC CnT")
-for(i in seq(1, ncol(jaccards))) {
-  for(j in seq(1, nrow(jaccards))) {
+for (i in seq(1, ncol(jaccards))) {
+  for (j in seq(1, nrow(jaccards))) {
     jaccard = genomicCorr.jaccard(peaks[[i]], peaks[[j]])
     jaccards[i, j] = jaccard
   }
@@ -394,11 +518,12 @@ Heatmap(
   column_names_gp = gpar(fontsize = 10),
   column_names_rot = 90,
   cell_fun = function(j, i, x, y, width, height, fill) {
-    grid.text(sprintf("%.2f", jaccards[i, j]), x, y, gp = gpar(fontsize = 10))}
+    grid.text(sprintf("%.2f", jaccards[i, j]), x, y, gp = gpar(fontsize = 10))
+  }
 )
 dev.off()
 
-## unsorted scCut&Tag
+### unsorted scCut&Tag res 0.1
 ## generate bed files from overlap analysis for deeptools heatmaps
 bed_output = "../results/GenomicRanges/unsorted_outputs/bulk_overlaps/"
 peak_set = "../results/Seurat/final/unsorted_brain/res0.1/cluster_spec_peaks/"
@@ -418,7 +543,7 @@ cluster0_gr = GRanges(
 )
 
 plot_euler(
-  list(pqs, cluster0_gr),
+  list(can_pqs, cluster0_gr),
   ignore.strand = TRUE,
   fills = c("#deebf7", "#9ecae1"),
   names = c("PQS", "0 (res 0.1)")
@@ -435,13 +560,19 @@ cluster1_gr = GRanges(
   )
 )
 
+sorted_peaks = fread("../data/CellRanger/GFP_sorted/peaks.bed")
+
+sorted_peaks = GRanges(
+  seqnames = sorted_peaks$V1,
+  ranges = IRanges(start = sorted_peaks$V2, end = sorted_peaks$V3)
+)
+
 plot_euler(
-  list(pqs, cluster1_gr),
+  list(can_pqs, cluster1_gr),
   ignore.strand = TRUE,
   fills = c("#deebf7", "#9ecae1"),
   names = c("PQS", "1 (res 0.1)")
 )
-
 
 all = rbind(cluster0, cluster1)
 all = all %>% mutate(type = "unsorted")
@@ -455,17 +586,35 @@ all = GRanges(
   )
 )
 
+# comparison with GFP sorted peaks
+pdf(
+  file = glue("{result_folder}unsorted_cluster0_1_vs_GFPsorted.pdf"),
+  # The directory you want to save the file in
+  width = 8,
+  height = 8
+)
+plot_euler(
+  list(sorted_peaks, cluster1_unsorted, cluster0_unsorted),
+  ignore.strand = TRUE,
+  fills = c("white", "#bcbcbc", "#addd8e"),
+  names = c("sorted (all peaks)", "unsort. cl. 1", " unsort. cl. 0")
+)
+dev.off()
+
 # unique cluster 0
-read_cov = bw_loci(glue(bigwigs, "0.bam_RPGC.bigwig"), glue(bigwigs, "1.bam_RPGC.bigwig"), 
-                   loci = all, )
+read_cov = bw_loci(glue(bigwigs, "0.bam_RPGC.bigwig"),
+                   glue(bigwigs, "1.bam_RPGC.bigwig"),
+                   loci = all,
+)
 read_cov = as.data.frame(read_cov)
 read_cov = inner_join(read_cov, as.data.frame(all), by = c("seqnames", "start", "end"))
 
-only_cluster0 = read_cov %>% dplyr::filter(!X0.bam_RPGC == Inf) %>% 
-  dplyr::filter(X0.bam_RPGC >= 4) %>% 
+only_cluster0 = read_cov %>% dplyr::filter(!X0.bam_RPGC == Inf) %>%
+  dplyr::filter(X0.bam_RPGC >= 4) %>%
   dplyr::select(seqnames, start, end, signalValue)
 
-write_tsv(only_cluster0, glue("{bed_output}unsorted_cluster0_unique_peaks_res0.1.tsv"))
+write_tsv(only_cluster0,
+          glue("{bed_output}unsorted_cluster0_unique_peaks_res0.1.tsv"))
 
 only_cluster0 = only_cluster0 %>% dplyr::select(seqnames, start, end)
 
@@ -479,15 +628,18 @@ write.table(
 )
 
 # unique cluster 1
-read_cov = bw_loci(glue(bigwigs, "1.bam_RPGC.bigwig"), glue(bigwigs, "0.bam_RPGC.bigwig") , loci = all)
+read_cov = bw_loci(glue(bigwigs, "1.bam_RPGC.bigwig"),
+                   glue(bigwigs, "0.bam_RPGC.bigwig") ,
+                   loci = all)
 read_cov = as.data.frame(read_cov)
 read_cov = inner_join(read_cov, as.data.frame(all), by = c("seqnames", "start", "end"))
 
-only_cluster1 = read_cov %>% dplyr::filter(!X1.bam_RPGC == Inf) %>% 
-  dplyr::filter(X1.bam_RPGC >= 4) %>% 
+only_cluster1 = read_cov %>% dplyr::filter(!X1.bam_RPGC == Inf) %>%
+  dplyr::filter(X1.bam_RPGC >= 4) %>%
   dplyr::select(seqnames, start, end, signalValue)
 
-write_tsv(only_cluster1, glue("{bed_output}unsorted_cluster1_unique_peaks_res0.1.tsv"))
+write_tsv(only_cluster1,
+          glue("{bed_output}unsorted_cluster1_unique_peaks_res0.1.tsv"))
 
 only_cluster1 = only_cluster1 %>% dplyr::select(seqnames, start, end)
 
@@ -501,7 +653,10 @@ write.table(
 )
 
 # both cluster 0,1
-ol = findOverlaps(cluster0_gr, cluster1_gr, type = "any", ignore.strand = FALSE)
+ol = findOverlaps(cluster0_gr,
+                  cluster1_gr,
+                  type = "any",
+                  ignore.strand = FALSE)
 
 # intersection
 both = cluster0_gr[queryHits(ol)]
@@ -521,21 +676,27 @@ write.table(
 )
 
 # with GenomicRanges
-cluster0_unique = cluster0_gr[-queryHits(findOverlaps(cluster0_gr, cluster1_gr, type="any")),]
+cluster0_unique = cluster0_gr[-queryHits(findOverlaps(cluster0_gr, cluster1_gr, type =
+                                                        "any")), ]
 cluster0_unique = as.data.frame(cluster0_unique)
 cluster0_unique = cluster0_unique[which
-                                  (cluster0_unique$signalValue > median(cluster0_unique$signalValue)),]
-cluster0_unique %>% dplyr::select(seqnames, start, end) %>% 
-  write_tsv(., glue("{bed_output}unique_cluster0-median_filtered-GR.bed"), col_names = FALSE)
+                                  (cluster0_unique$signalValue > median(cluster0_unique$signalValue)), ]
+cluster0_unique %>% dplyr::select(seqnames, start, end) %>%
+  write_tsv(.,
+            glue("{bed_output}unique_cluster0-median_filtered-GR.bed"),
+            col_names = FALSE)
 
-cluster1_unique = cluster1_gr[-queryHits(findOverlaps(cluster1_gr, cluster0_gr, type="any")),]
+cluster1_unique = cluster1_gr[-queryHits(findOverlaps(cluster1_gr, cluster0_gr, type =
+                                                        "any")), ]
 cluster1_unique = as.data.frame(cluster1_unique)
 cluster1_unique = cluster1_unique[which
-                                  (cluster1_unique$signalValue > median(cluster1_unique$signalValue)),]
-cluster1_unique %>% dplyr::select(seqnames, start, end) %>% 
-  write_tsv(., glue("{bed_output}unique_cluster1-median_filtered-GR.bed"), col_names = FALSE)
+                                  (cluster1_unique$signalValue > median(cluster1_unique$signalValue)), ]
+cluster1_unique %>% dplyr::select(seqnames, start, end) %>%
+  write_tsv(.,
+            glue("{bed_output}unique_cluster1-median_filtered-GR.bed"),
+            col_names = FALSE)
 
-# unsorted scCut&Tag res 0.8
+### unsorted scCut&Tag res 0.8
 peak_set = "../results/Seurat/final/unsorted_brain/res0.8/cluster_spec_peaks/"
 result_folder = "../results/GenomicRanges/unsorted_outputs/"
 # scCnT data
@@ -621,156 +782,84 @@ rest$type = "rest"
 ol = findOverlaps(cluster4_gr, rest, type = "any", ignore.strand = FALSE)
 cl4_unique = cluster4_gr[-queryHits(ol)]
 
-all = c(cluster0_gr, cluster1_gr, cluster2_gr, cluster3_gr, cluster4_gr)
-
-cl0_unique = as_tibble(cl0_unique) %>% dplyr::select(seqnames, start, end) %>% 
-  write_tsv(glue("{result_folder}unsorted-unique_cl0_peaks.bed"), col_names = FALSE)
-cl1_unique = as_tibble(cl1_unique) %>% dplyr::select(seqnames, start, end) %>% 
-  write_tsv(glue("{result_folder}unsorted-unique_cl1_peaks.bed"), col_names = FALSE)
-cl2_unique = as_tibble(cl2_unique) %>% dplyr::select(seqnames, start, end) %>% 
-  write_tsv(glue("{result_folder}unsorted-unique_cl2_peaks.bed"), col_names = FALSE)
-cl3_unique = as_tibble(cl3_unique) %>% dplyr::select(seqnames, start, end) %>% 
-  write_tsv(glue("{result_folder}unsorted-unique_cl3_peaks.bed"), col_names = FALSE)
-cl4_unique = as_tibble(cl4_unique) %>% dplyr::select(seqnames, start, end) %>% 
-  write_tsv(glue("{result_folder}unsorted-unique_cl4_peaks.bed"), col_names = FALSE)
-
-# Venn visualizations
-plot_euler(
-  list(all_pqs, cl3_unique),
-  ignore.strand = TRUE,
-  fills = c("#deebf7", "#3182bd"),
-  names = c("all PQS", "unsorted peaks")
-)
-
-gr = c(cluster0_gr, cluster1_gr, cluster2_gr, cluster3_gr, cluster4_gr) %>% 
-  
-grl = splitAsList(gr, gr$type)
-grl = unique(grl)
-
+# Venn visualizations of cluster spec. peaks vs. PQS sites
 pdf(
-  file = glue("{result_folder}unsorted_cluster0_1_2_3_4.pdf"),
-  # The directory you want to save the file in
+  file = glue("{result_folder}unsorted_cluster0-allPQS.pdf"),
   width = 8,
   height = 8
 )
-res = makeVennDiagram(Peaks = grl, NameOfPeaks = names(grl))
-print(res)
+plot_euler(
+  list(all_pqs, cl0_unique),
+  ignore.strand = TRUE,
+  fills = c("white", "#a1d99b"),
+  names = c("all PQS", "cluster 0")
+)
 dev.off()
 
-venn_cnt2venn <- function(venn_cnt) {
-  n <- which(colnames(venn_cnt) == "Counts") - 1
-  SetNames = colnames(venn_cnt)[1:n]
-  Weight = venn_cnt[, "Counts"]
-  names(Weight) <- apply(venn_cnt[, 1:n], 1, paste, collapse = "")
-  Venn(SetNames = SetNames, Weight = Weight)
-}
-
-v <- venn_cnt2venn(res$vennCounts)
-print(plot(v, doWeights = FALSE))
-
-## mESC-MEF scCut&Tag
-## generate bed files from overlap analysis for deeptools heatmaps
-bed_output = "../results/GenomicRanges/mESC-MEF_outputs/bulk_overlaps/"
-peak_set = "../results/Seurat/final/mesc_mef/cluster_spec_peaks/"
-bigwigs = "../results/Seurat/final/mesc_mef/cluster_spec_bigwigs/"
-#list.files(bigwigs)
-
-# scCnT data
-cluster0 = fread(glue("{peak_set}0_peaks.narrowPeak"))
-
-cluster0_gr = GRanges(
-  seqnames = cluster0$V1,
-  ranges = IRanges(
-    start = cluster0$V2,
-    end = cluster0$V3,
-    signalValue = cluster0$V7
-  )
+pdf(
+  file = glue("{result_folder}unsorted_cluster1-allPQS.pdf"),
+  width = 8,
+  height = 8
 )
-
-cluster1 = fread(glue("{peak_set}1_peaks.narrowPeak"))
-
-cluster1_gr = GRanges(
-  seqnames = cluster1$V1,
-  ranges = IRanges(
-    start = cluster1$V2,
-    end = cluster1$V3,
-    signalValue = cluster1$V7
-  )
+plot_euler(
+  list(all_pqs, cl1_unique),
+  ignore.strand = TRUE,
+  fills = c("white", "#a1d99b"),
+  names = c("all PQS", "cluster 1")
 )
+dev.off()
 
-all = rbind(cluster0, cluster1)
-all = all %>% mutate(type = "unsorted")
-
-all = GRanges(
-  seqnames = all$V1,
-  ranges = IRanges(
-    start = all$V2,
-    end = all$V3,
-    signalValue = all$V7
-  )
+pdf(
+  file = glue("{result_folder}unsorted_cluster2-allPQS.pdf"),
+  width = 8,
+  height = 8
 )
-
-# unique cluster 0
-read_cov = bw_loci(glue(bigwigs, "0.bam_RPGC.bigwig"), glue(bigwigs, "1.bam_RPGC.bigwig") , loci = all)
-read_cov = as.data.frame(read_cov)
-read_cov = inner_join(read_cov, as.data.frame(all), by = c("seqnames", "start", "end"))
-
-only_cluster0 = read_cov %>% dplyr::filter(!X0.bam_RPGC == Inf) %>% 
-  dplyr::filter(X0.bam_RPGC >= 4) %>% 
-  dplyr::select(seqnames, start, end, signalValue)
-
-write_tsv(only_cluster0, glue("{bed_output}unsorted_cluster0_unique_peaks_res0.1.tsv"))
-
-only_cluster0 = only_cluster0 %>% dplyr::select(seqnames, start, end)
-
-write.table(
-  only_cluster0,
-  glue("{bed_output}MACS2_cl0_only.bed"),
-  quote = FALSE,
-  sep = "\t",
-  row.names = FALSE,
-  col.names = FALSE
+plot_euler(
+  list(all_pqs, cl2_unique),
+  ignore.strand = TRUE,
+  fills = c("white", "#a1d99b"),
+  names = c("all PQS", "cluster 2")
 )
+dev.off()
 
-# unique cluster 1
-read_cov = bw_loci(glue(bigwigs, "1.bam_RPGC.bigwig"), glue(bigwigs, "0.bam_RPGC.bigwig") , loci = all)
-read_cov = as.data.frame(read_cov)
-read_cov = inner_join(read_cov, as.data.frame(all), by = c("seqnames", "start", "end"))
-
-only_cluster1 = read_cov %>% dplyr::filter(!X1.bam_RPGC == Inf) %>% 
-  dplyr::filter(X1.bam_RPGC >= 4) %>% 
-  dplyr::select(seqnames, start, end, signalValue)
-
-write_tsv(only_cluster1, glue("{bed_output}unsorted_cluster1_unique_peaks_res0.1.tsv"))
-
-only_cluster1 = only_cluster1 %>% dplyr::select(seqnames, start, end)
-
-write.table(
-  only_cluster1,
-  glue("{bed_output}MACS2_cl1_only.bed"),
-  quote = FALSE,
-  sep = "\t",
-  row.names = FALSE,
-  col.names = FALSE
+pdf(
+  file = glue("{result_folder}unsorted_cluster3-allPQS.pdf"),
+  width = 8,
+  height = 8
 )
-
-# both cluster 0,1
-ol = findOverlaps(cluster0_gr, cluster1_gr, type = "any", ignore.strand = FALSE)
-
-# intersection
-both = cluster0_gr[queryHits(ol)]
-both = data.frame(
-  seqnames = seqnames(both),
-  starts = start(both) - 1,
-  ends = end(both)
+plot_euler(
+  list(all_pqs, cl3_unique),
+  ignore.strand = TRUE,
+  fills = c("white", "#a1d99b"),
+  names = c("all PQS", "cluster 3")
 )
+dev.off()
 
-write.table(
-  both,
-  glue("{bed_output}MACS2_intersection.bed"),
-  quote = FALSE,
-  sep = "\t",
-  row.names = FALSE,
-  col.names = FALSE
+pdf(
+  file = glue("{result_folder}unsorted_cluster4-allPQS.pdf"),
+  width = 8,
+  height = 8
 )
+plot_euler(
+  list(all_pqs, cl4_unique),
+  ignore.strand = TRUE,
+  fills = c("white", "#a1d99b"),
+  names = c("all PQS", "cluster 4")
+)
+dev.off()
 
+cl0_unique = as_tibble(cl0_unique) %>% dplyr::select(seqnames, start, end) %>%
+  write_tsv(glue("{result_folder}unsorted-unique_cl0_peaks.bed"),
+            col_names = FALSE)
+cl1_unique = as_tibble(cl1_unique) %>% dplyr::select(seqnames, start, end) %>%
+  write_tsv(glue("{result_folder}unsorted-unique_cl1_peaks.bed"),
+            col_names = FALSE)
+cl2_unique = as_tibble(cl2_unique) %>% dplyr::select(seqnames, start, end) %>%
+  write_tsv(glue("{result_folder}unsorted-unique_cl2_peaks.bed"),
+            col_names = FALSE)
+cl3_unique = as_tibble(cl3_unique) %>% dplyr::select(seqnames, start, end) %>%
+  write_tsv(glue("{result_folder}unsorted-unique_cl3_peaks.bed"),
+            col_names = FALSE)
+cl4_unique = as_tibble(cl4_unique) %>% dplyr::select(seqnames, start, end) %>%
+  write_tsv(glue("{result_folder}unsorted-unique_cl4_peaks.bed"),
+            col_names = FALSE)

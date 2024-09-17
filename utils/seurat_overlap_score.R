@@ -60,7 +60,8 @@ cal_ovlpScore <- function(t1, t2){
 ident2rna = data.frame(idents = rownames(meta), rna_label = meta$pred_cell_type)
 ident2rna = ident2rna[complete.cases(ident2rna), ]
 
-ident2g4 = data.frame(idents = rownames(meta), rna_label = meta$seurat_clusters)
+
+ident2g4 = data.frame(idents = rownames(meta), rna_label = as.character((meta$seurat_clusters)))
 ident2g4 = ident2g4[complete.cases(ident2g4), ]
 
 ovlpScore.df = cal_ovlpScore(ident2rna, ident2g4)
@@ -111,7 +112,7 @@ ident2rna = data.frame(idents = rownames(meta), rna_label = meta$scBridge_predic
 ident2rna = ident2rna[complete.cases(ident2rna), ]
 ident2rna = ident2rna[which(ident2rna$rna_label != "Novel (Most Unreliable)"), ]
 
-ident2g4 = data.frame(idents = rownames(meta), rna_label = meta$seurat_clusters)
+ident2g4 = data.frame(idents = rownames(meta), rna_label = as.character(meta$seurat_clusters))
 ident2g4 = ident2g4[complete.cases(ident2g4), ]
 
 ovlpScore.df = cal_ovlpScore(ident2rna, ident2g4)

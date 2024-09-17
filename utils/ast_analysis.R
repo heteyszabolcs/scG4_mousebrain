@@ -79,7 +79,7 @@ norm = rna[['RNA']]@data
 g4_counts = as.matrix(sorted@assays$GA@data)
 peaks = as.matrix(sorted@assays$peaks@data)
 
-# highly predicted MOL cell ids
+# highly predicted AST cell ids
 barcodes_seurat = pred_score$cell_id[which(pred_score$AST > 0.90)]
 barcodes_scbridge = pred %>% filter(Prediction == "AST") %>% pull(V1)
 barcodes_scbridge_others = pred %>% filter(Prediction != "AST") %>% 
@@ -1109,11 +1109,6 @@ ggsave(
   device = "pdf"
 )
 
-glue("sign. down: {as.character(
-     volc_input %>% dplyr::filter(group == 'down') %>% rownames %>% length)}
-     sign. up: {as.character(
-     volc_input %>% dplyr::filter(group == 'up') %>% rownames %>% length)}")
-
 # volcano plot
 volc_input = diff_AST_vs_nonAST_scBr %>% 
   mutate(gene_name = rownames(.)) 
@@ -1192,3 +1187,27 @@ ggsave(
   height = 10,
   dpi = 300
 )
+
+# Klk6 coverage plot
+predicted_cellids = list()
+for(i in 1:length(rownames(meta))) {
+  if(rownames(meta)[i] %in% pred$V1) {
+    predicted_cellids[i] = pred[which(pred$V1 == rownames(meta)[i]), 2]
+  }
+}
+predicted_cellids = unlist(predicted_cellids)
+
+meta = meta %>%
+  mutate(scBridge_pred = predicted_cellids)
+sorted@meta.data = meta
+
+CoveragePlot(
+  object = sorted,
+  region = "Klk6",
+  assay = "peaks",
+  annotation = TRUE,
+  show.bulk = TRUE,
+  ymax = 2,
+  extend.upstream = 2000,
+  group.by = "scBridge_pred",
+  peaks = TRUE)

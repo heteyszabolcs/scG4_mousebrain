@@ -88,6 +88,8 @@ doublet_test = RunPCA(doublet_test, verbose = F, npcs = 20)
 doublet_test = RunUMAP(doublet_test, dims = 1:10, verbose = F)
 
 nExp = round(ncol(doublet_test) * 0.04)  # expect 4% doublets
+# if doubletFinder function does not work due to Seurat versions: 
+# remotes::install_github(“egeulgen/DoubletFinder”)
 doublet_test <- doubletFinder_v3(doublet_test, pN = 0.25, pK = 0.09, nExp = nExp, PCs = 1:10)
 singlets = rownames(doublet_test@meta.data[which(doublet_test@meta.data[,5] == "Singlet"),])
 
@@ -112,8 +114,7 @@ seurat = FindClusters(object = seurat,
 
 # removing cluster 5 - cluster 5 contains only 26 cells and in downstream steps showed some bias
 if(res == 0.8) {
-  seurat = subset(x = seurat, idents = 5, invert = TRUE)
-  seurat = subset(x = seurat, idents = 6, invert = TRUE)
+  seurat = subset(x = seurat, idents = 4, invert = TRUE)
 }
 
 
@@ -122,7 +123,7 @@ nF_violin = VlnPlot(seurat, group.by = "seurat_clusters", features = "nFeature_p
   #scale_fill_manual(values = c("#addd8e", "#bdbdbd", "#addd8e")) +
   ggtitle("nFeature (peaks)") +
   xlab("cluster") + 
-  ylim(0, 30000) +
+  ylim(0, 5000) +
   theme(
     text = element_text(size = 25),
     plot.title = element_text(size = 20),
@@ -132,9 +133,9 @@ nF_violin = VlnPlot(seurat, group.by = "seurat_clusters", features = "nFeature_p
   NoLegend()
 nC_violin = VlnPlot(seurat, group.by = "seurat_clusters", features = "nCount_peaks", pt.size = 0.1) +
   #scale_fill_manual(values = c("#addd8e", "#bdbdbd", "#addd8e")) +
-  ggtitle("nFeature (peaks)") +
+  ggtitle("nCount (peaks)") +
   xlab("cluster") + 
-  ylim(0, 30000) +
+  ylim(0, 20000) +
   theme(
     text = element_text(size = 25),
     plot.title = element_text(size = 20),
@@ -146,7 +147,7 @@ TSS_violin = VlnPlot(seurat, group.by = "seurat_clusters", features = "TSS_fragm
   #scale_fill_manual(values = c("#addd8e", "#bdbdbd", "#addd8e")) +
   ggtitle("TSS fragments") +
   xlab("cluster") + 
-  ylim(0, 30000) +
+  ylim(0, 10000) +
   theme(
     text = element_text(size = 25),
     plot.title = element_text(size = 20),
@@ -265,9 +266,10 @@ if(res == 0.1) {
   dim = DimPlot(
     object = seurat,
     label = TRUE,
-    pt.size = 2,
+    pt.size = 1,
     label.size = 7,
-    repel = TRUE
+    repel = TRUE,
+    order = c(0, 1, 2, 3)
   ) +
     NoLegend() +
     scale_color_brewer(palette = "Set3") +
@@ -284,9 +286,10 @@ if(res == 0.1) {
   dim_blank = DimPlot(
     object = seurat,
     label = TRUE,
-    pt.size = 2,
+    pt.size = 1,
     label.size = 7,
-    repel = TRUE
+    repel = TRUE,
+    order = c(0, 1, 2, 3)
   ) +
     NoLegend() +
     NoAxes() +
